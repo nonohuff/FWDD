@@ -35,3 +35,7 @@ F_{N}(\omega,T)=\left|1+(-1)^{n+1}e^{i\omega T} +2\sum_{k=1}^N(-1)^ke^{i\omega t
 $$
 
 Where $t_k$ is the time corresponding to the center of the $k^{th}$ pulse, and $t_{\pi}$ is the pulse width.
+
+# Document Conventions
+* $\omega = 2 \pi f$
+* $t = \frac{1}{f}$
