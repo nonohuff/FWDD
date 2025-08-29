@@ -26,27 +26,26 @@ class MemoryThresholdError(Exception):
 @nb.njit(parallel=False)
 def coherence_decay_profile_delta(t,noise_profile):
     """
-    Calculate the coherence decay profile based on the provided formula, e**(-chi(t)),
-    uder the assumption that the filter function is a delta function.
+    Calculate the coherence decay profile based on the provided formula, e**(-χ(t)),
+    under the assumption that the filter function is a delta function, (i.e. χ(t)=t*S(ω)/π).
     Inputs:
     noise_profile: a function that implements the noise spectrum, S(omega)
     t: a float of the time variable
     Output:
-    e**(-chi(t))
+    e**(-χ(t))
     """
-    # noise_profile = noise_spectrum_1f(np.pi/t, A, alpha)
     chi_t = t*noise_profile/np.pi
     return np.exp(-chi_t)
 
 def noise_inversion_delta(t , C_t):
     """
-    Calculate the noise inversion based on the provided formula, C(t) = 1 - e**(-chi(t)),
-    under the assumption that the filter function is a delta function.
+    Calculate the noise, S(ω), based on the provided formula, C(t) = 1 - e**(-χ(t)),
+    under the assumption that the filter function is a delta function, (i.e. χ(t)=t*S(ω)/π).
     Inputs:
     t: a float of the time variable
     C_t: a float of the coherence decay profile at time t
     Output:
-    1 - e**(-chi(t))
+    S(ω)
     """
     return -np.pi*np.log(C_t)/t
 
@@ -88,21 +87,37 @@ def find_k_largest_peaks(arr, k):
     
     return k_largest_peak_indices, k_largest_peak_heights
 
+
+##### 
+# Note on computing C(t):
+# Performing this integral is challenging due to the oscillatory nature of the integrand and the presence of sharp peaks and the log scaling of ω over which the noise can be relevant.
+# In order to tackle these challenges, we employ a combination of techniques, including adaptive quadrature and careful ω selection.
+# adaptive quadrature integration tends to be slow and inaccurate due to the sharp peaks. So, we reccomned using one of the included Riemann methods "trapezoid" or "simpson".
+# We numerically evaluate these integrals by carefully selecting the integration points, especially around the peaks of the integrand, so that we can capture the important features of the integrand without requiring an excessively fine grid.
+# We begin with a coarse grid defined by kwargs["omega_range"] and kwargs["omega_resolution"], and add to these points any singularities from the noise, S(ω), and the approximate locations of the first M peaks near ω = (2m+1)n*π/t.
+# Then, we compute what the integrand would be and find the largest points in the integrand, and add kwargs["peak_resolution"] points around each of these peaks to better resolve them.
+# The integrand is computed one final time, and this array is used to perform the Riemann integration.
+#####
+
+
+### FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below. 
+# You can edit this function to make them passable parameters if you wish, or just edit them directly. ###
 def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_profile, *args, narrow_window = True, max_memory_mb=15000, **kwargs):
     """Computes the integral in eq #1 in [Meneses,Wise,Pagliero,et.al. 2022] exactly, considering finite pulse widths, which computes the Coherence decay profile, C(t). 
+    FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below. You can edit this function to make them passable parameters if you wish, or just edit them directly.
     Inputs:
     t: a float of the time variable
     N: a float of the number of pulses
     tau_p: a float of the pulse width
-    method: a string of the method to use for integration. Options are "quad,"trapezoid","simpson",and "log_sum_exp". 
-    noise_profile: a function that implements the noise spectrum, S(omega), or a numpy array of the noise spectrum
+    method: a string of the method to use for integration. Options are "quad", "trapezoid", "simpson", and "log_sum_exp".
+    noise_profile: a function that implements the noise spectrum, S(ω), or a numpy array of the noise spectrum
     *args: a list of arguments to pass to the noise_profile function
     **kwargs: a dictionary of keyword arguments to pass to the function
     Output:
-    np.exp(-chi_t): The coherence decay profile, C(t), the omega values used in the integration, the filter function values, and the integrand values.
+    e**(-χ(t)): The coherence decay profile, C(t), the omega values used in the integration, the filter function values, and the integrand values.
     omega_values: a numpy array of angular frequencies
     filter_values: a numpy array of the filter function values, evaluated at omega_values
-    integrand: a numpy array of the integrand values given by S(omega)*F(omega*t)/(2*pi*omega**2), evaluated at omega_values
+    integrand: a numpy array of the integrand values given by S(ω)*F(ω*t)/(2*π*ω**2), evaluated at omega_values
     """
     if not (isinstance(N, int) and N > 0):
         raise TypeError(f"N must be a positive integer, got {type(N).__name__}")
@@ -115,34 +130,38 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     if current_memory > max_memory_mb:
         raise MemoryError(f"Memory usage ({current_memory}MB) exceeded threshold")
 
+    # If narrow_window is enabled, adjust the omega range so that the lower bound is set to 0.5*N*np.pi/t. This avoids wasting numerical points
+    #  at low frequencies, where the filter function is small. Disable narrow_window if you want full control over the integration window in ω.
     if narrow_window:
         old_range = kwargs.get("omega_range")  # Default range if not provided
         kwargs["omega_range"] = (0.5*N*np.pi/t,old_range[1]) # Set the lower bound of the omega range to 0.5*N*np.pi/tau_p
      
-
-    if callable(noise_profile):
+    if callable(noise_profile): # If noise_profile is a function
         try:
-            omegas = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), 10**7) # setting resolution to 10^7 points. Might be a little overkill
+            omegas = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), 10**7) # setting default resolution to 10^7 points. Might be a little overkill
         except KeyError:
             omegas = np.logspace(-4, 8, 10**7) # setting resolution to 10^7 points. Might be a little overkill  
 
         S_w = noise_profile(omegas, *args)  # Check that the noise_profile function works with the omega_values
 
+        # First, we identify the k largest values. k is arbitrary, and you can increase it if you want more resolution.
         k = 10**4
-        # Find the k largest values
-        # k_largest_values = np.partition(S_w, -k)[-k:]
+        # Find the k largest values.
+        # k_largest_values = np.partition(S_w, -k)[-k:] # not needed, but included in case you need it for something else.
         k_largest_indices = np.argpartition(S_w, -k)[-k:]
 
         local_maxima_indices, _ =  find_peaks(S_w)
         local_minima_indices, _ = find_peaks(-S_w)
 
-        points_of_interest = np.unique(np.concatenate((omegas[local_maxima_indices], omegas[local_minima_indices],omegas[k_largest_indices])))
+        points_of_interest = np.unique(np.concatenate((omegas[local_maxima_indices], omegas[local_minima_indices], omegas[k_largest_indices])))
         # print(len(points_of_interest))
 
-        # Find the peaks of the filter function, located at omega = (2m+1)n*Pi/t for integer m
+        # Find the peaks of the filter function, located at approximately ω = (2m+1)n*π/t for integer m
         base = np.pi * N / t
 
-        omega_peaks = np.array([base * (2*k + 1) for k in range(100)]) # consider the first 100 FF resonance peaks
+        M = 100
+        omega_peaks = np.array([base * (2*m + 1) for m in range(M)]) # consider the first 100 FF resonance peaks.
+        # 100 peaks is an arbitrary choice here. You can include more peaks if you want more resolution.
 
         # Check for additional FF resonance peaks near the points of interest on the noise
         # additional_filter_peaks = []
@@ -165,12 +184,12 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
 
         filter_values = filter_function_finite(omega_values, N, t, tau_p)
 
-    
         integrand = np.multiply(filter_values, np.divide(noise_profile(omega_values, *args),(np.power(omega_values,2))))
 
-
+        # Now that we've computed the integrand once, we find the largest peaks in the integrand, which will contribute most to the integral. 
         largest_peak_indices, _ = find_k_largest_peaks(integrand, kwargs.get('num_peaks_cutoff', len(omega_values)))
 
+        # for each of these peaks, we will add kwargs["peak_resolution"] additional ω points around them for more precise integration.
         if list(largest_peak_indices): # If there are singularities in the filter function within the specified omega range
             additional_omega_values = np.array([])
             for index in largest_peak_indices:
@@ -186,14 +205,13 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
 
                     # You could opt to use a logspace around the peak, but I went with a linear space for now. Have to fix issue where peak_width/2 > peak, which would require a 
                     # more sophisticated approach to setting peak_width.
-                    # additional_omega_values.append(omega_values, np.logspace(np.log10(peak-peak*peak_width), np.log10(peak+peak*peak_width), peak_res))
+                    # additional_omega_values.append(omega_values, np.logspace(np.log10(peak-peak*peak_width), np.log10(peak+peak*peak_width), peak_res)) # uncomment if you wish to use logspace
                     additional_omega_values = np.append(additional_omega_values,np.linspace(peak-peak*peak_width, peak+peak*peak_width, peak_res))
                     
             additional_omega_values = additional_omega_values[additional_omega_values > 0] # Remove non-positive values to be safe. Important when N=1 to avoid devide by zero errors.
             additional_filter_values = filter_function_finite(additional_omega_values, N, t, tau_p)
             additional_integrand = np.multiply(additional_filter_values, np.divide(noise_profile(additional_omega_values, *args),(np.power(additional_omega_values,2))))
 
-            
             # Concatenate and get unique, sorted omega values
             merged_omega_values = np.sort(np.unique(np.concatenate((omega_values, additional_omega_values))))
             # Create merged filter values array
@@ -215,7 +233,10 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             filter_values = merged_filter_values
         
             # print("Range of Omega Values: ", np.format_float_scientific(np.min(omega_values)), np.format_float_scientific(np.max(omega_values)))
-    else:
+    else: # If the noise_profile the user specified is not a function, (i.e. tt's an array of the noise values at certain frequencies)
+        # In this case, we don't get to re-define the frequency values to better evaluate the integral. Instead, we have to take the frequency points the user gives us.
+        # The default is to assume the frequency values are taken in logspace, and defined by kwargs["omega_range"] and kwargs["omega_resolution"]. If this is not the case, you will need to specify 
+        # omega_values directly below.
         try:
             S_w = np.array(noise_profile)
             if not np.issubdtype(S_w.dtype, np.number):

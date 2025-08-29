@@ -1,5 +1,5 @@
 # FWDD
-FWDD (Finite Width Dynamical Decoupling) implements Dynamical Decoupling considering the effects of FInite Pulse Widths. All times in this code assume microseconds $(\mu s)$. So, if you specify a variable that has units of time, please ensure that they are in microseconds $(\mu s)$. You can convert results after computation.
+FWDD (Finite Width Dynamical Decoupling) implements Dynamical Decoupling considering the effects of FInite Pulse Widths. All times in the tutorials use microseconds $(\mu s)$. 
 
 # Coherence-Noise Relationship
 
