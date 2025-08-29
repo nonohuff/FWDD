@@ -15,7 +15,9 @@ from scipy.stats import cauchy
 
 # If you add a new noise spectrum, I reccommend you to add it to the noise_spectrum_combination function, and pass that to any of the C(t) functions, so that you can use it in the same way as the other noise spectra.
 
-# I utilize numba just in time compilation throughout the code to speed up computation. you can see the @nb.njit decorator on top of the functions
+# I utilize numba just in time compilation throughout the code to speed up computation. you can see the @nb.njit decorator on top of the functions.
+# If there are any issues with numba, you can try removing the decorator, but the performance will be in general slower.
+
 
 @nb.njit(parallel=False)
 def noise_spectrum_1f(omega, A, alpha):
@@ -173,7 +175,6 @@ def noise_spectrum_combination(omega,f_params,lor_params,white_params, double_po
 
 
     # If there are numerical issues, try increasing the precision of the dtype (e.g. np.float64). If that doesn't work, try using math.fsum.
-    #  You'll have to write a custom function like precise_complex_sum above, which handles complex arrays.
     noise_specturm = np.sum(np.array(noise_specturm_list),axis=0)
 
     return noise_specturm
