@@ -11,7 +11,7 @@ from joblib import Parallel, delayed, parallel_backend
 from scipy.signal import find_peaks
 from scipy.integrate import quad, simpson, trapezoid, IntegrationWarning
 
-from filter_function import filter_function_finite
+from package import filter_function as ff 
 
 # Custom Exception Classes
 class ParallelExecutionError(Exception):
@@ -181,8 +181,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         breakpoints = np.unique(np.concatenate((omega_peaks, additional_filter_peaks, points_of_interest)))
         omega_values = np.unique(np.concatenate((breakpoints, omega_sweep)))
 
-
-        filter_values = filter_function_finite(omega_values, N, t, tau_p)
+        filter_values = ff.filter_function_finite(omega_values, N, t, tau_p)
 
         integrand = np.multiply(filter_values, np.divide(noise_profile(omega_values, *args),(np.power(omega_values,2))))
 
@@ -209,7 +208,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
                     additional_omega_values = np.append(additional_omega_values,np.linspace(peak-peak*peak_width, peak+peak*peak_width, peak_res))
                     
             additional_omega_values = additional_omega_values[additional_omega_values > 0] # Remove non-positive values to be safe. Important when N=1 to avoid devide by zero errors.
-            additional_filter_values = filter_function_finite(additional_omega_values, N, t, tau_p)
+            additional_filter_values = ff.filter_function_finite(additional_omega_values, N, t, tau_p)
             additional_integrand = np.multiply(additional_filter_values, np.divide(noise_profile(additional_omega_values, *args),(np.power(additional_omega_values,2))))
 
             # Concatenate and get unique, sorted omega values
@@ -249,7 +248,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         except KeyError:
             omega_values = np.logspace(-4, 8, kwargs.get("omega_resolution",len(S_w)))
 
-        filter_values = filter_function_finite(omega_values, N, t, tau_p)
+        filter_values = ff.filter_function_finite(omega_values, N, t, tau_p)
         integrand = np.multiply(filter_values, np.divide(S_w, (np.power(omega_values,2))))
 
     if method == "quad":
@@ -298,6 +297,14 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         chi_t = chi_t/(np.pi)
         
         return np.exp(-chi_t), omega_values, filter_values, integrand/(np.pi)
+    
+
+### 
+# The rest of the functions in this document implement CPU parallelism for computing the coherence profile, C(t), via coherence_decay_profile_finite_peaks_with_widths
+# Since, in general, we want to compute C(t) over an array of timepoints, this can be computationally annoying as the filter function, F(omega,t) changes for each time point,
+# so, we must re-compute the integral for each of these timepoints. Fortunately, these computations are independent of one another, so we can parallelize across these timepoints, and 
+# use every CPU available to us, rather than just one.
+###
     
 def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, min_n_jobs=1):
     """
@@ -360,7 +367,8 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
 @retry_parallel_execution
 def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jobs=None, batch_size=None, max_memory_per_worker=1000, **kwargs):
     """
-    Parallelized version of coherence_decay_profile_finite_peaks_with_widths.
+    Parallelized version of coherence_decay_profile_finite_peaks_with_widths. Computes the coherence decay profile, C(t), over an array of timepoints.
+    The function defaults to using all available CPUs (n_jobs=None). You can change this parameter to use a specific number of CPUs.
     Inputs:
     times: a numpy array of time values
     n: a float of the number of pulses
