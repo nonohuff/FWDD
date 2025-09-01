@@ -112,7 +112,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     method: a string of the method to use for integration. Options are "quad", "trapezoid", "simpson", and "log_sum_exp".
     noise_profile: a function that implements the noise spectrum, S(ω), or a numpy array of the noise spectrum
     *args: a list of arguments to pass to the noise_profile function
-    narrow_window: a boolean that determines whether to lower bound the omega range used for integration by (1/2)*(N*π/t)
+    narrow_window: a boolean that determines whether to lower bound the omega range used for integration by 1/2*N*np.pi/t
     **kwargs: a dictionary of keyword arguments to pass to the function
     Output:
     e**(-χ(t)): The coherence decay profile, C(t), the omega values used in the integration, the filter function values, and the integrand values.

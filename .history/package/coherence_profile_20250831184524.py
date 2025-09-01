@@ -112,7 +112,6 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     method: a string of the method to use for integration. Options are "quad", "trapezoid", "simpson", and "log_sum_exp".
     noise_profile: a function that implements the noise spectrum, S(ω), or a numpy array of the noise spectrum
     *args: a list of arguments to pass to the noise_profile function
-    narrow_window: a boolean that determines whether to lower bound the omega range used for integration by (1/2)*(N*π/t)
     **kwargs: a dictionary of keyword arguments to pass to the function
     Output:
     e**(-χ(t)): The coherence decay profile, C(t), the omega values used in the integration, the filter function values, and the integrand values.
@@ -257,7 +256,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             raise ValueError("The noise_profile must be a function when using the quad method. Try using the trapezoid or simpson method instead.")
 
         # for the scipy adaptive quadrature, we need to provide the integrand as a function of omega
-        integrand = lambda omega: (noise_profile(omega, *args) * ff.filter_function_finite(omega, N, t, tau_p)) / np.power(omega,2)
+        integrand = lambda omega: (noise_profile(omega, *args) * filter_function_finite(omega, N, t, tau_p)) / np.power(omega,2)
         # Integrate the integrand over the specified omega range using a maximum of "limit" subdivisions in the adaptive alogrithm,
         #  and using the omega_peaks as break points where sigularities occur.
 
@@ -366,7 +365,7 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
     return decorator(func)
 
 @retry_parallel_execution
-def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jobs=None, batch_size=None, narrow_window = True, max_memory_per_worker=1000, **kwargs):
+def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jobs=None, batch_size=None, max_memory_per_worker=1000, **kwargs):
     """
     Parallelized version of coherence_decay_profile_finite_peaks_with_widths. Computes the coherence decay profile, C(t), over an array of timepoints.
     The function defaults to using all available CPUs (n_jobs=None). You can change this parameter to use a specific number of CPUs.
@@ -405,7 +404,7 @@ def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jo
     def process_batch(batch):
         return [coherence_decay_profile_finite_peaks_with_widths(
             t, N, tau_p, method, noise_profile, *args, 
-            narrow_window = narrow_window, max_memory_mb=max_memory_per_worker, **kwargs) 
+            max_memory_mb=max_memory_per_worker, **kwargs) 
                 for t in batch]
     
     with parallel_backend('loky', n_jobs=n_jobs):
