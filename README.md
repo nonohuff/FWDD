@@ -31,7 +31,7 @@ This approximation holds true when the $\pi$-pulses are themselves much shorter 
 When the length of the $\pi$-pulse becomes a sizable fraction of the delay (or $T_2$), such a $\delta$ approximation cannot be made. In that case, the filter function needs to be modified to accommodate for the finite pulse duration and can be expressed as:
 
 $$
-F_{N}(\omega,T)=\left|1+(-1)^{n+1}e^{i\omega T} +2\sum_{k=1}^N(-1)^ke^{i\omega t_{k}}\cos\left(\frac{\omega t_{\pi}}{2}\right)\right|^{2}
+F_{N}(\omega,T)=\left|1+(-1)^{N+1}e^{i\omega T} +2\sum_{k=1}^N(-1)^ke^{i\omega t_{k}}\cos\left(\frac{\omega t_{\pi}}{2}\right)\right|^{2}
 $$
 
 Where $t_k$ is the time corresponding to the center of the $k^{th}$ pulse, and $t_{\pi}$ is the pulse width.
