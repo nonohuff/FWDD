@@ -2,7 +2,7 @@ import os
 
 # Bootstrapping functionality
 import random
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Any, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,7 +14,9 @@ from .noise_learning_fitting import func_to_fit
 from .noise_spectra import noise_spectrum_combination
 
 
-def add_gaussian_noise(signal, noise_level=0.01, noise_type='absolute', seed=None):
+def add_gaussian_noise(
+    signal: Any, noise_level: float = 0.01, noise_type: str = "absolute", seed: Optional[int] = None
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Add Gaussian noise to an input vector.
     
@@ -88,8 +90,17 @@ def add_gaussian_noise(signal, noise_level=0.01, noise_type='absolute', seed=Non
     return noisy_signal, noise
 
 
-def find_C_t_crossing_points(C_t_max, C_t_min, t_min=0, t_max=300, num_scan_points=1000,
-                           noise_spectrum=noise_spectrum_combination, noise_params=None, delta=False, **finite_width_params):
+def find_C_t_crossing_points(
+    C_t_max: float,
+    C_t_min: float,
+    t_min: float = 0,
+    t_max: float = 300,
+    num_scan_points: int = 1000,
+    noise_spectrum: Any = noise_spectrum_combination,
+    noise_params: Optional[Any] = None,
+    delta: bool = False,
+    **finite_width_params: Any,
+) -> Dict[str, Optional[float]]:
     """
     Find crossing points for both C_t_max and C_t_min thresholds. I.e.  the times where C(t) crosses C_t_max and C_t_min.
 
@@ -185,7 +196,14 @@ def find_C_t_crossing_points(C_t_max, C_t_min, t_min=0, t_max=300, num_scan_poin
         'rightmost_C_t_min': rightmost_C_t_min
     }
 
-def find_time_range_for_C_t_bounds(C_t_max, C_t_min, finite_width_params, noise_spectrum, noise_params=None, delta=False):
+def find_time_range_for_C_t_bounds(
+    C_t_max: float,
+    C_t_min: float,
+    finite_width_params: dict,
+    noise_spectrum: Any,
+    noise_params: Optional[Any] = None,
+    delta: bool = False,
+) -> Tuple[Optional[float], Optional[float]]:
     """
     Find the time range between leftmost C_t_max crossing and rightmost C_t_min crossing
     
@@ -256,7 +274,7 @@ def find_time_range_for_C_t_bounds(C_t_max, C_t_min, finite_width_params, noise_
             float(rightmost_t) if rightmost_t is not None else None)
 
 
-def analyze_intervals(intervals, print_results=True):
+def analyze_intervals(intervals: np.ndarray, print_results: bool = True) -> List[Tuple[float, float, List[int]]]:
     """
     Analyze overlapping intervals and return list of new intervals with their coverage info.
     
@@ -315,7 +333,7 @@ def analyze_intervals(intervals, print_results=True):
 
     return result_intervals
 
-def find_widest_contiguous_stretch(arr, lb, ub):
+def find_widest_contiguous_stretch(arr: np.ndarray, lb: float, ub: float) -> List[int]:
    '''
    Find the longest contiguous stretch of values in arr that lie between lb and ub (inclusive).
    Inputs:
@@ -355,7 +373,7 @@ def find_widest_contiguous_stretch(arr, lb, ub):
 
    return list(range(start_idx, end_idx + 1))
 
-def format_parameters(args_list, break_lines=True):
+def format_parameters(args_list: List[dict], break_lines: bool = True) -> str:
     """Format parameter list for legend display"""
     param_str = ""
 
@@ -434,8 +452,17 @@ def format_parameters(args_list, break_lines=True):
 
     return param_str
 
-def create_combined_analysis_plot(results_dict, n_values, combined_loss=False, save_dir=None,
-                                 experimental_data=True, noise_params=None, delta_approx=False, F=1, include_inversion=False):
+def create_combined_analysis_plot(
+    results_dict: dict,
+    n_values: List[int],
+    combined_loss: bool = False,
+    save_dir: Optional[str] = None,
+    experimental_data: bool = True,
+    noise_params: Optional[List[dict]] = None,
+    delta_approx: bool = False,
+    F: float = 1.0,
+    include_inversion: bool = False,
+) -> None:
     """
     Create a combined plot showing both coherence decay profiles and noise spectra.
     

@@ -1,6 +1,7 @@
 import numba as nb
 import numpy as np
 from scipy.stats import cauchy
+from typing import Union
 
 #define the functions to have different kinds of noise
 ##### Document Conventions #####
@@ -20,7 +21,7 @@ from scipy.stats import cauchy
 
 
 @nb.njit(parallel=False)
-def noise_spectrum_1f(omega, A, alpha):
+def noise_spectrum_1f(omega: np.ndarray, A: float, alpha: float) -> np.ndarray:
     '''
     Implements S(ω) = A/f^α
     Inputs: 
@@ -35,7 +36,7 @@ def noise_spectrum_1f(omega, A, alpha):
 # I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact
 # on the performance of the function. The scipy function should be more stable and has better numerical precision, but I have also provided a numba implementation
 # that should do the same thing (but please check).
-def noise_spectrum_lor(omega, omega_0, gamma,A):
+def noise_spectrum_lor(omega: np.ndarray, omega_0: float, gamma: float, A: float) -> np.ndarray:
     '''
     Implements S(ω) = A * (1/(pi*gamma(1+((omega-omega_0)/gamma)**2)))
     Inputs:
@@ -71,7 +72,7 @@ def noise_spectrum_lor(omega, omega_0, gamma,A):
 #     return result
 
 @nb.njit(parallel=False)
-def noise_spectrum_white(omega, C):
+def noise_spectrum_white(omega: Union[np.ndarray, float, int], C: float) -> np.ndarray:
     '''Implements S(ω)
     Handles omega as numpy array, list, or single number
     Always returns a numpy array
@@ -81,8 +82,11 @@ def noise_spectrum_white(omega, C):
     else:
         return np.full(len(omega), C)
 
+
 @nb.njit(parallel=False)
-def noise_spectrum_double_power_law(omega, A, alpha, beta, gamma):
+def noise_spectrum_double_power_law(
+    omega: np.ndarray, A: float, alpha: float, beta: float, gamma: float
+) -> np.ndarray:
     """
     Calculate the continued fraction: A / omega^alpha * (1 + (omega/gamma)^(beta-alpha))
 
@@ -108,7 +112,9 @@ def noise_spectrum_double_power_law(omega, A, alpha, beta, gamma):
 
     return result
 
-def noise_spectrum_combination(omega,f_params,lor_params,white_params, double_power_law_params):
+def noise_spectrum_combination(
+    omega: np.ndarray, f_params: dict, lor_params: dict, white_params: dict, double_power_law_params: dict
+) -> np.ndarray:
     '''Implements the combination of noise spectra
     Inputs:
     omega: a numpy array of angular frequencies

@@ -1,4 +1,5 @@
 import multiprocessing
+from typing import Union, Tuple, Optional, Callable, Any, List, Dict
 
 import numpy as np
 from scipy.optimize import NonlinearConstraint, differential_evolution, minimize
@@ -12,7 +13,13 @@ from .noise_spectra import noise_spectrum_combination
 
 
 # Perform curve fitting
-def func_to_fit(times, noise_profile, *args, delta=False, **kwargs):
+def func_to_fit(
+    times: np.ndarray,
+    noise_profile: Any,
+    *args: Any,
+    delta: bool = False,
+    **kwargs: Any,
+) -> np.ndarray:
     '''
     Function to fit the coherence profile to the observed noise profile.
     Inputs:
@@ -49,7 +56,7 @@ def func_to_fit(times, noise_profile, *args, delta=False, **kwargs):
     return C_t
 
 
-def huber_loss(residuals, delta=None):
+def huber_loss(residuals: Any, delta: Optional[float] = None) -> float:
     """
     Huber loss function using scipy.special.huber
     
@@ -82,8 +89,18 @@ def huber_loss(residuals, delta=None):
     # We need to return the mean
     return np.mean(huber_values)
 
-def loss_function(params, C_t_observed, times, noise_profile, param_structure,
-                  fixed_kwargs, delta=False, loss_type='mse', noise_level=None):
+
+def loss_function(
+    params: Union[np.ndarray, list],
+    C_t_observed: np.ndarray,
+    times: np.ndarray,
+    noise_profile: Any,
+    param_structure: List[Dict[str, int]],
+    fixed_kwargs: dict,
+    delta: bool = False,
+    loss_type: str = 'mse',
+    noise_level: Optional[float] = None,
+) -> float:
     """
     Calculate loss between predicted and observed C_t.
     
@@ -137,7 +154,15 @@ def loss_function(params, C_t_observed, times, noise_profile, param_structure,
             delta_huber = None  # Will use MAD-based estimation
         return huber_loss(residuals, delta_huber)
 
-def get_parameter_errors(result, C_t_observed, times, noise_profile, param_structure, fixed_kwargs, delta=False):
+def get_parameter_errors(
+    result: Any,
+    C_t_observed: np.ndarray,
+    times: np.ndarray,
+    noise_profile: Any,
+    param_structure: List[Dict[str, int]],
+    fixed_kwargs: dict,
+    delta: bool = False,
+) -> np.ndarray:
     # Get the Hessian matrix
     hess_inv = result.hess_inv
 
@@ -161,8 +186,12 @@ def get_parameter_errors(result, C_t_observed, times, noise_profile, param_struc
 
     return parameter_errors
 
+
 # Helper function to reconstruct args from flattened params
-def reconstruct_args(params, param_structure):
+def reconstruct_args(
+    params: Union[np.ndarray, list],
+    param_structure: List[Dict[str, int]],
+) -> List[Dict[str, List[float]]]:
     # Convert params to numpy array if it's a list
     if isinstance(params, list):
         params = np.array(params)
@@ -182,7 +211,13 @@ def reconstruct_args(params, param_structure):
     return reconstructed_args
 
 
-def create_coherence_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl):
+def create_coherence_parameter_constraints(
+    param_structure: List[Dict[str, int]],
+    N1f: int,
+    Nlor: int,
+    NC: int,
+    Ndpl: int,
+) -> List[NonlinearConstraint]:
     """
     Create constraints for coherence decay optimization problem.
     For double power law noise: beta > alpha.
@@ -240,9 +275,21 @@ def create_coherence_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl)
 
     return constraints
 
-def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_kwargs,
-                        bounds=None, method='diff_ev', delta=False, loss_type="mse",
-                        noise_level=None, population=10, iterations=200, use_constraints=True):
+def fit_coherence_decay(
+    C_t_observed: np.ndarray,
+    times: np.ndarray,
+    noise_profile: Any,
+    initial_args: List[dict],
+    fixed_kwargs: dict,
+    bounds: Optional[List[Tuple[Optional[float], Optional[float]]]] = None,
+    method: str = 'diff_ev',
+    delta: bool = False,
+    loss_type: str = "mse",
+    noise_level: Optional[float] = None,
+    population: int = 10,
+    iterations: int = 200,
+    use_constraints: bool = True,
+) -> Tuple[List[dict], List[dict], Any]:
     """
     Fit the coherence decay function to observed data.
     
@@ -439,8 +486,18 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
 
     return optimized_args, optimized_errors, result
 
-def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile, param_structure,
-                          fixed_kwargs_dict, n_values, delta=False, loss_type='huber', noise_level=None):
+def combined_loss_function(
+    params: Union[np.ndarray, list],
+    C_t_observed_dict: Dict[int, np.ndarray],
+    times_dict: Dict[int, np.ndarray],
+    noise_profile: Any,
+    param_structure: List[Dict[str, int]],
+    fixed_kwargs_dict: Dict[int, dict],
+    n_values: List[int],
+    delta: bool = False,
+    loss_type: str = 'huber',
+    noise_level: Optional[float] = None,
+) -> float:
     """
     Calculate combined loss across multiple n values.
     
@@ -531,10 +588,22 @@ def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile,
 
     return total_loss
 
-def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, initial_args,
-                                fixed_kwargs_dict, n_values, bounds=None, method='L-BFGS-B',
-                                delta=False, loss_type="mse", noise_level=None, population=10,
-                                iterations=200, use_constraints=True):
+def fit_coherence_decay_combined(
+    C_t_observed_dict: Dict[int, np.ndarray],
+    times_dict: Dict[int, np.ndarray],
+    noise_profile: Any,
+    initial_args: List[dict],
+    fixed_kwargs_dict: Dict[int, dict],
+    n_values: List[int],
+    bounds: Optional[List[Tuple[Optional[float], Optional[float]]]] = None,
+    method: str = 'L-BFGS-B',
+    delta: bool = False,
+    loss_type: str = "mse",
+    noise_level: Optional[float] = None,
+    population: int = 10,
+    iterations: int = 200,
+    use_constraints: bool = True,
+) -> Tuple[List[dict], List[dict], Any]:
     """
     Fit the coherence decay function to observed data across multiple n values.
     
@@ -735,7 +804,13 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
 ###########################################################################################################################
 
 # Global loss function for multiprocessing compatibility
-def _global_loss_function(params, freq_points, S_w_observed, param_structure, loss_type='mse'):
+def _global_loss_function(
+    params: Union[np.ndarray, list],
+    freq_points: np.ndarray,
+    S_w_observed: np.ndarray,
+    param_structure: List[Dict[str, int]],
+    loss_type: str = 'mse',
+) -> float:
     """Calculate loss between predicted and observed noise spectrum.
     Inputs:
     - params: Flattened list of parameters to optimize
@@ -781,7 +856,13 @@ def _global_loss_function(params, freq_points, S_w_observed, param_structure, lo
         print(f"Error in loss calculation: {e}")
         return 1e10
 
-def create_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl):
+def create_parameter_constraints(
+    param_structure: List[Dict[str, int]],
+    N1f: int,
+    Nlor: int,
+    NC: int,
+    Ndpl: int,
+) -> List[NonlinearConstraint]:
     """
     Create constraints for the optimization problem.
     For double power law noise: beta > alpha.
@@ -829,8 +910,20 @@ def create_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl):
 
     return constraints
 
-def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
-                      bounds=None, method='L-BFGS-B', loss_type='mse', use_constraints=True, population=5000, iterations=1000):
+def fit_noise_spectrum(
+    freq_points: np.ndarray,
+    S_w_observed: np.ndarray,
+    N1f: int = 1,
+    Nlor: int = 0,
+    NC: int = 0,
+    Ndpl: int = 0,
+    bounds: Optional[List[Tuple[Optional[float], Optional[float]]]] = None,
+    method: str = 'L-BFGS-B',
+    loss_type: str = 'mse',
+    use_constraints: bool = True,
+    population: int = 5000,
+    iterations: int = 1000,
+) -> Tuple[List[dict], Any]:
     """
     Fit noise_spectrum_combination to observed noise spectrum data.
     

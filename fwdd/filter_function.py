@@ -1,9 +1,10 @@
 import numba as nb
 import numpy as np
+from typing import Union
 
 
 @nb.njit(parallel=False)
-def filter_function_approx(omega, N, T):
+def filter_function_approx(omega: np.ndarray, N: int, T: float) -> np.ndarray:
     '''Implemnents an approximation of the filter function, F(omega*t) (eq #2 in [Meneses,Wise,Pagliero,et.al. 2022]).
     Approximation assumes pi-pulse are instantaneous (i.e. tau_pi = 0). Note, this function has singular points at (2m+1)n*Pi/t for integer m.
     Inputs:
@@ -19,14 +20,17 @@ def filter_function_approx(omega, N, T):
         return 16 * (np.cos((omega*T) / 2) ** 2) * (np.sin((omega*T)/(4*N))**4) / (np.cos((omega*T)/(2*N))**2)
 
 @nb.njit(parallel=False)
-def numba_complex_sum(t_k, omega):
+def numba_complex_sum(t_k: np.ndarray, omega: np.ndarray) -> np.ndarray:
     result = np.zeros_like(omega, dtype=np.complex128)
     for i in range(len(omega)):
         for k in range(len(t_k)):
             result[i] += ((-1)**(k+1))*np.exp(1j * omega[i] * t_k[k])
     return result
 
-def filter_function_finite(omega, N, T, tau_p, method='numba'):
+
+def filter_function_finite(
+    omega: Union[np.ndarray, float, int], N: int, T: float, tau_p: float, method: str = 'numba'
+) -> np.ndarray:
     ''' Implements the filter function, F(omega*t) (eq #1 in the paper).
     Inputs:
     omega: a numpy array of angular frequencies

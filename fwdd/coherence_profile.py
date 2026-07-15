@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Union, Tuple, Optional, Callable, Any, List
 
 import numba as nb
 import numpy as np
@@ -22,7 +23,7 @@ class MemoryThresholdError(Exception):
 
 # define the function to compute coherence decay using a delta function approximation
 @nb.njit(parallel=False)
-def coherence_decay_profile_delta(t,noise_profile):
+def coherence_decay_profile_delta(t: Union[np.ndarray, float], noise_profile: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
     """
     Calculate the coherence decay profile based on the provided formula, e**(-χ(t)),
     under the assumption that the filter function is a delta function, (i.e. χ(t)=t*S(ω)/π).
@@ -35,7 +36,8 @@ def coherence_decay_profile_delta(t,noise_profile):
     chi_t = t*noise_profile/np.pi
     return np.exp(-chi_t)
 
-def noise_inversion_delta(t , C_t):
+
+def noise_inversion_delta(t: Union[np.ndarray, float], C_t: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
     """
     Calculate the noise, S(ω), based on the provided formula, C(t) = 1 - e**(-χ(t)),
     under the assumption that the filter function is a delta function, (i.e. χ(t)=t*S(ω)/π).
@@ -47,12 +49,14 @@ def noise_inversion_delta(t , C_t):
     """
     return -np.pi*np.log(C_t)/t
 
-def monitor_memory():
+
+def monitor_memory() -> float:
     """Monitor current memory usage"""
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1024 / 1024  # in MB
 
-def find_k_largest_peaks(arr, k):
+
+def find_k_largest_peaks(arr: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Find the k largest peaks in a 1D array.
     
@@ -100,7 +104,17 @@ def find_k_largest_peaks(arr, k):
 
 ### FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below.
 # You can edit this function to make them passable parameters if you wish, or just edit them directly. ###
-def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_profile, *args, narrow_window = True, max_memory_mb=15000, **kwargs):
+def coherence_decay_profile_finite_peaks_with_widths(
+    t: float,
+    N: int,
+    tau_p: float,
+    method: str,
+    noise_profile: Any,
+    *args: Any,
+    narrow_window: bool = True,
+    max_memory_mb: float = 15000.0,
+    **kwargs: Any,
+) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
     """Computes the integral in eq #1 in [Meneses,Wise,Pagliero,et.al. 2022] exactly, considering finite pulse widths, which computes the Coherence decay profile, C(t). 
     FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below. You can edit this function to make them passable parameters if you wish, or just edit them directly.
     Inputs:
@@ -305,7 +319,12 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
 # use every CPU available to us, rather than just one.
 ###
 
-def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, min_n_jobs=1):
+def retry_parallel_execution(
+    func: Optional[Callable] = None,
+    max_retries: Optional[int] = None,
+    initial_n_jobs: Optional[int] = None,
+    min_n_jobs: int = 1,
+) -> Callable:
     """
     Decorator that implements retry logic with CPU reduction for parallel execution.
     Can be used with or without parameters.
@@ -364,7 +383,19 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
     return decorator(func)
 
 @retry_parallel_execution
-def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jobs=None, batch_size=None, narrow_window = True, max_memory_per_worker=1000, **kwargs):
+def parallel_coherence_decay(
+    times: np.ndarray,
+    N: int,
+    tau_p: float,
+    method: str,
+    noise_profile: Any,
+    *args: Any,
+    n_jobs: Optional[int] = None,
+    batch_size: Optional[int] = None,
+    narrow_window: bool = True,
+    max_memory_per_worker: float = 1000.0,
+    **kwargs: Any,
+) -> Tuple[np.ndarray, Tuple, Tuple, Tuple]:
     """
     Parallelized version of coherence_decay_profile_finite_peaks_with_widths. Computes the coherence decay profile, C(t), over an array of timepoints.
     The function defaults to using all available CPUs (n_jobs=None). You can change this parameter to use a specific number of CPUs.
