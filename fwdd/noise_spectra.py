@@ -131,7 +131,7 @@ def noise_spectrum_combination(
 
     for i,my_dict in enumerate([f_params, lor_params, white_params, double_power_law_params]):
 
-        if bool(my_dict) == True:
+        if bool(my_dict):
             for key,value in my_dict.items():
                 if type(value) is int:
                     my_dict[key] = [value]
