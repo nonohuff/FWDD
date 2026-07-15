@@ -41,7 +41,7 @@ def filter_function_finite(
     F(omega*t): a numpy array
     '''
     # Convert single number to array if needed
-    single_number = isinstance(omega, (int, float))
+    single_number = isinstance(omega, (int, float)) or (isinstance(omega, np.ndarray) and omega.ndim == 0) or np.isscalar(omega)
     if single_number:
         omega = np.array([omega])
 
@@ -86,4 +86,6 @@ def filter_function_finite(
 
     result = np.power(np.abs(1 + np.power(-1,N+1) * np.exp(1j * omega * T) + 2 * np.cos(omega * tau_p / 2) * sum_term),2)
 
+    if single_number:
+        return result[0]
     return result

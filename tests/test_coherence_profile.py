@@ -4,6 +4,7 @@ from fwdd.coherence_profile import (
     coherence_decay_profile_delta,
     coherence_decay_profile_finite_peaks_with_widths,
     noise_inversion_delta,
+    parallel_coherence_decay,
 )
 
 
@@ -39,3 +40,75 @@ def test_coherence_decay_profile_finite_peaks_with_widths():
         peak_resolution=10
     )
     assert 0.0 <= C_t <= 1.0
+
+    # Test simpson method
+    C_t_simp, _, _, _ = coherence_decay_profile_finite_peaks_with_widths(
+        t=1.0,
+        N=8,
+        tau_p=0.024,
+        method="simpson",
+        noise_profile=noise_profile,
+        omega_resolution=1000,
+        omega_range=(1e-3, 1e2),
+        num_peaks_cutoff=5,
+        peak_resolution=10
+    )
+    assert 0.0 <= C_t_simp <= 1.0
+
+    # Test quad method
+    C_t_quad, _, _, _ = coherence_decay_profile_finite_peaks_with_widths(
+        t=1.0,
+        N=8,
+        tau_p=0.024,
+        method="quad",
+        noise_profile=noise_profile,
+        omega_resolution=1000,
+        omega_range=(1e-3, 1e2),
+        num_peaks_cutoff=5,
+        peak_resolution=10
+    )
+    assert 0.0 <= C_t_quad <= 1.0
+
+    # Test static numpy array as noise_profile
+    S_w_static = np.array([0.1 / (w**1.0) for w in np.logspace(-3, 2, 100)])
+    C_t_static, _, _, _ = coherence_decay_profile_finite_peaks_with_widths(
+        t=1.0,
+        N=8,
+        tau_p=0.024,
+        method="trapezoid",
+        noise_profile=S_w_static,
+        omega_resolution=100,
+        omega_range=(1e-3, 1e2)
+    )
+    assert 0.0 <= C_t_static <= 1.0
+
+    # Test narrow_window=False
+    C_t_no_narrow, _, _, _ = coherence_decay_profile_finite_peaks_with_widths(
+        t=1.0,
+        N=8,
+        tau_p=0.024,
+        method="trapezoid",
+        noise_profile=noise_profile,
+        omega_resolution=100,
+        omega_range=(1e-3, 1e2),
+        narrow_window=False
+    )
+    assert 0.0 <= C_t_no_narrow <= 1.0
+
+def test_parallel_coherence_decay():
+    def noise_profile(omega):
+        return 0.1 / (omega**1.0)
+    times = np.array([1.0, 2.0])
+    C_t, _, _, _ = parallel_coherence_decay(
+        times,
+        N=8,
+        tau_p=0.024,
+        method="trapezoid",
+        noise_profile=noise_profile,
+        omega_resolution=100,
+        omega_range=(1e-3, 1e2),
+        n_jobs=2,
+        max_memory_per_worker=1000
+    )
+    assert len(C_t) == 2
+    assert 0.0 <= C_t[0] <= 1.0
