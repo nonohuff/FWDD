@@ -1,18 +1,15 @@
+import multiprocessing
+
 import numpy as np
-import matplotlib.pyplot as plt
-
-from scipy.optimize import minimize, differential_evolution, NonlinearConstraint
+from scipy.optimize import NonlinearConstraint, differential_evolution, minimize
 from scipy.special import huber
-
 from sklearn.metrics import mean_squared_error
-
 from skopt import gp_minimize
 from skopt.space import Real
 
-import multiprocessing
-
 from . import coherence_profile as cp
 from .noise_spectra import noise_spectrum_combination
+
 
 # Perform curve fitting
 def func_to_fit(times, noise_profile, *args, delta=False, **kwargs):
@@ -27,7 +24,7 @@ def func_to_fit(times, noise_profile, *args, delta=False, **kwargs):
     Outputs:
     - C_t: Coherence profile at the given times
     '''
-    n = kwargs.pop('N', None) 
+    n = kwargs.pop('N', None)
     tau_p = kwargs.pop('tau_p', None)
     integration_method = kwargs.pop('integration_method', None)
 
@@ -48,7 +45,7 @@ def func_to_fit(times, noise_profile, *args, delta=False, **kwargs):
     if np.any(np.isnan(C_t)) or np.any(np.isinf(C_t)):
         # Return a large value array to penalize bad parameter combinations
         C_t = np.full_like(C_t, 1e10)
-    
+
     return C_t
 
 
@@ -69,23 +66,23 @@ def huber_loss(residuals, delta=None):
         Mean Huber loss
     """
     residuals = np.array(residuals)
-    
+
     if delta is None:
         # Automatic delta selection using MAD (Median Absolute Deviation)
         mad = np.median(np.abs(residuals - np.median(residuals)))
         delta = 1.345 * mad * 1.4826  # 1.4826 is consistency factor for normal distribution
         if delta == 0:  # Handle case where all residuals are identical
             delta = 0.01  # Small default value
-    
+
     # scipy.special.huber returns (delta, r) where r is the Huber loss value
     # for each residual scaled by delta
     huber_values = huber(delta, residuals)
-    
+
     # The huber function returns the loss for each point
     # We need to return the mean
     return np.mean(huber_values)
 
-def loss_function(params, C_t_observed, times, noise_profile, param_structure, 
+def loss_function(params, C_t_observed, times, noise_profile, param_structure,
                   fixed_kwargs, delta=False, loss_type='mse', noise_level=None):
     """
     Calculate loss between predicted and observed C_t.
@@ -105,7 +102,7 @@ def loss_function(params, C_t_observed, times, noise_profile, param_structure,
     # Reconstruct args from flattened params
     reconstructed_args = []
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -114,21 +111,21 @@ def loss_function(params, C_t_observed, times, noise_profile, param_structure,
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         reconstructed_args.append(new_dict)
-    
+
     # Make a prediction
     C_t_pred = func_to_fit(times, noise_profile, *reconstructed_args, delta=delta, **fixed_kwargs)
-    
+
     # Convert to numpy arrays
     C_t_pred = np.array(C_t_pred)
     C_t_observed = np.array(C_t_observed)
-    
+
     # Handle NaN or infinite values
     if np.any(np.isnan(C_t_pred)) or np.any(np.isinf(C_t_pred)):
         return 1e10
-    
+
     # Calculate residuals
     residuals = C_t_observed - C_t_pred
-    
+
     # Calculate and return the loss
     if loss_type == 'mse':
         return mean_squared_error(C_t_observed, C_t_pred)
@@ -143,25 +140,25 @@ def loss_function(params, C_t_observed, times, noise_profile, param_structure,
 def get_parameter_errors(result, C_t_observed, times, noise_profile, param_structure, fixed_kwargs, delta=False):
     # Get the Hessian matrix
     hess_inv = result.hess_inv
-    
+
     # Calculate residuals at the optimal point
-    residuals = np.array(C_t_observed) - np.array(func_to_fit(times, noise_profile, 
-                                                            *reconstruct_args(result.x, param_structure), 
+    residuals = np.array(C_t_observed) - np.array(func_to_fit(times, noise_profile,
+                                                            *reconstruct_args(result.x, param_structure),
                                                             delta=delta, **fixed_kwargs))
-    
+
     # Calculate MSE (mean squared error)
     mse = np.sum(residuals**2) / (len(residuals) - len(result.x))
-    
+
     # Covariance matrix = mse * hess_inv
     if isinstance(hess_inv, np.ndarray):
         covariance = mse * hess_inv
     else:
         # For L-BFGS-B, hess_inv might be a LinearOperator
         covariance = mse * hess_inv.todense()
-    
+
     # Standard errors are the square root of the diagonal elements
     parameter_errors = np.sqrt(np.diag(covariance))
-    
+
     return parameter_errors
 
 # Helper function to reconstruct args from flattened params
@@ -169,10 +166,10 @@ def reconstruct_args(params, param_structure):
     # Convert params to numpy array if it's a list
     if isinstance(params, list):
         params = np.array(params)
-        
+
     reconstructed_args = []
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -181,7 +178,7 @@ def reconstruct_args(params, param_structure):
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         reconstructed_args.append(new_dict)
-    
+
     return reconstructed_args
 
 
@@ -208,43 +205,43 @@ def create_coherence_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl)
     constraints : list
         List of constraint dictionaries for scipy.optimize   
     """
-    
+
     constraints = []
-    
+
     if Ndpl > 0:
         # Find the indices for double power law parameters
         param_index = 0
-        
+
         # Skip 1/f noise parameters
         if N1f > 0:
             param_index += 2 * N1f  # A and alpha
-            
-        # Skip Lorentzian parameters  
+
+        # Skip Lorentzian parameters
         if Nlor > 0:
             param_index += 3 * Nlor  # A, omega_0, gamma
-            
+
         # Skip white noise parameters
         if NC > 0:
             param_index += NC  # C
-            
+
         # Now we're at double power law parameters
         # Order is: A, alpha, beta, gamma (repeated for each component)
         for i in range(Ndpl):
             # For each double power law component
             alpha_index = param_index + Ndpl + i  # alpha is second in the flattened array
             beta_index = param_index + 2*Ndpl + i  # beta is third
-            
+
             def constraint_func(params, alpha_idx=alpha_index, beta_idx=beta_index):
                 """beta > alpha constraint with small tolerance"""
                 return params[beta_idx] - params[alpha_idx] - 1e-6
-            
+
             constraint = NonlinearConstraint(constraint_func, 0, np.inf)
             constraints.append(constraint)
-    
+
     return constraints
 
-def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_kwargs, 
-                        bounds=None, method='diff_ev', delta=False, loss_type="mse", 
+def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_kwargs,
+                        bounds=None, method='diff_ev', delta=False, loss_type="mse",
                         noise_level=None, population=10, iterations=200, use_constraints=True):
     """
     Fit the coherence decay function to observed data.
@@ -282,7 +279,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
     # Create a structure that describes the parameter dictionaries
     param_structure = []
     flattened_initial_params = []
-    
+
     for arg_dict in initial_args:
         structure_dict = {}
         for key, value in arg_dict.items():
@@ -305,10 +302,10 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
      # Perform the optimization
     if method == 'gp_minimize':
         # Use Gaussian Process optimization for expensive functions. This is a global optimization method.
-        
+
         if bounds is None:
             raise ValueError("Bounds are required for Gaussian Process optimization")
-        
+
         # Convert bounds to skopt dimensions
         dimensions = []
         for i, bound in enumerate(bounds):
@@ -318,11 +315,11 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
             lower = -1e6 if (bound[0] == -np.inf or bound[0] == None)  else bound[0]
             upper = 1e6 if (bound[1] == -np.inf or bound[1] == None)  else bound[1]
             dimensions.append(Real(lower, upper, name=f'param_{i}'))
-        
+
         # Wrapper function for skopt (expects parameter list)
         def skopt_objective(x):
             return loss_function(x, C_t_observed, times, noise_profile, param_structure, fixed_kwargs, delta, loss_type, noise_level)
-        
+
         result = gp_minimize(
             func=skopt_objective,
             dimensions=dimensions,
@@ -343,10 +340,10 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
 
     elif method == 'diff_ev':
         # Use differential evolution for expensive functions. This is also a global optimization method, and it is gradient-free.
-        
+
         if bounds is None:
             raise ValueError("Bounds are required for differential evolution")
-        
+
         # Convert bounds format if needed - ensure all bounds are finite
         clean_bounds = []
         for bound in bounds:
@@ -356,7 +353,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
             lower = -1e6 if (bound[0] == -np.inf or bound[0] == None)  else bound[0]
             upper = 1e6 if (bound[1] == -np.inf or bound[1] == None)  else bound[1]
             clean_bounds.append((lower, upper))
-        
+
         result = differential_evolution(
             func=loss_function,
             bounds = clean_bounds,
@@ -372,7 +369,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
             tol = 1e-6,  # Tolerance for convergence
             disp = True    # Show progress
         )
-        
+
     elif method == 'L-BFGS-B':
         # Use L-BFGS-B for local optimization (local optimizer)
         try:
@@ -385,7 +382,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
                 method=method,
                 options={'ftol': 1e-6, 'gtol': 1e-5, 'maxls': 100}
             )
-        except Exception as e:
+        except Exception:
             result = minimize(
                 loss_function,
                 np.array(flattened_initial_params),
@@ -393,7 +390,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
                 bounds=bounds,
                 constraints=constraints if constraints else (),  # Add constraints here
                 method=method,
-            )  
+            )
     else:
         # if the optimization method is not one of the three above, we pass it as an arguemtn to scipy minimize, if you'd like to try other optimizers.
         result = minimize(
@@ -403,19 +400,19 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
             bounds=bounds,
             constraints=constraints if constraints else (),  # Add constraints here
             method=method,
-        )  
+        )
 
     # Convert result.x to numpy array if it's a list (from gp_minimize)
     if isinstance(result.x, list):
         result_x = np.array(result.x)
     else:
         result_x = result.x
-    
+
     # Reconstruct the optimized args with errors
     optimized_args = []
     optimized_errors = []
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         # error_dict = {}
@@ -427,7 +424,7 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
                 param_index += length
         optimized_args.append(new_dict)
         # optimized_errors.append(error_dict)
-    
+
     # Verify constraints are satisfied (if they were applied)
     if use_constraints and Ndpl > 0:
         print("\nConstraint verification:")
@@ -439,10 +436,10 @@ def fit_coherence_decay(C_t_observed, times, noise_profile, initial_args, fixed_
                     constraint_satisfied = beta_val > alpha_val
                     print(f"Component {j}: beta={beta_val:.6f}, alpha={alpha_val:.6f}, "
                           f"beta > alpha: {constraint_satisfied}")
-    
+
     return optimized_args, optimized_errors, result
 
-def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile, param_structure, 
+def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile, param_structure,
                           fixed_kwargs_dict, n_values, delta=False, loss_type='huber', noise_level=None):
     """
     Calculate combined loss across multiple n values.
@@ -476,15 +473,15 @@ def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile,
         Combined loss across all n values
     """
     total_loss = 0.0
-    
+
     # Convert params to numpy array if it's a list
     if isinstance(params, list):
         params = np.array(params)
-    
+
     # Reconstruct args from flattened params
     reconstructed_args = []
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -493,7 +490,7 @@ def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile,
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         reconstructed_args.append(new_dict)
-    
+
     # Calculate loss for each n value
     for n in n_values:
         try:
@@ -501,21 +498,21 @@ def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile,
             fixed_kwargs = fixed_kwargs_dict[n]
             times = times_dict[n]
             C_t_observed = C_t_observed_dict[n]
-            
+
             # Make prediction for this n value
             C_t_pred = func_to_fit(times, noise_profile, *reconstructed_args, delta=delta, **fixed_kwargs)
-            
+
             # Convert to numpy arrays
             C_t_pred = np.array(C_t_pred)
             C_t_observed = np.array(C_t_observed)
-            
+
             # Handle NaN or infinite values
             if np.any(np.isnan(C_t_pred)) or np.any(np.isinf(C_t_pred)):
                 return 1e10
-            
+
             # Calculate residuals
             residuals = C_t_observed - C_t_pred
-            
+
             # Calculate loss for this n value
             if loss_type == 'mse':
                 n_loss = mean_squared_error(C_t_observed, C_t_pred)
@@ -525,18 +522,18 @@ def combined_loss_function(params, C_t_observed_dict, times_dict, noise_profile,
                 else:
                     delta_huber = None
                 n_loss = huber_loss(residuals, delta_huber)
-            
+
             total_loss += n_loss
-            
+
         except Exception as e:
             print(f"Error calculating loss for n={n}: {e}")
             return 1e10
-    
+
     return total_loss
 
-def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, initial_args, 
-                                fixed_kwargs_dict, n_values, bounds=None, method='L-BFGS-B', 
-                                delta=False, loss_type="mse", noise_level=None, population=10, 
+def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, initial_args,
+                                fixed_kwargs_dict, n_values, bounds=None, method='L-BFGS-B',
+                                delta=False, loss_type="mse", noise_level=None, population=10,
                                 iterations=200, use_constraints=True):
     """
     Fit the coherence decay function to observed data across multiple n values.
@@ -576,7 +573,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
     # Create a structure that describes the parameter dictionaries
     param_structure = []
     flattened_initial_params = []
-    
+
     for arg_dict in initial_args:
         structure_dict = {}
         for key, value in arg_dict.items():
@@ -601,7 +598,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
     if method == 'gp_minimize':
         if bounds is None:
             raise ValueError("Bounds are required for Gaussian Process optimization")
-        
+
         # Convert bounds to skopt dimensions
         dimensions = []
         for i, bound in enumerate(bounds):
@@ -610,13 +607,13 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
             lower = -1e6 if (bound[0] == -np.inf or bound[0] == None) else bound[0]
             upper = 1e6 if (bound[1] == -np.inf or bound[1] == None) else bound[1]
             dimensions.append(Real(lower, upper, name=f'param_{i}'))
-        
+
         # Wrapper function for skopt
         def skopt_objective(x):
-            return combined_loss_function(x, C_t_observed_dict, times_dict, noise_profile, 
-                                        param_structure, fixed_kwargs_dict, n_values, 
+            return combined_loss_function(x, C_t_observed_dict, times_dict, noise_profile,
+                                        param_structure, fixed_kwargs_dict, n_values,
                                         delta, loss_type, noise_level)
-        
+
         result = gp_minimize(
             func=skopt_objective,
             dimensions=dimensions,
@@ -637,7 +634,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
     elif method == 'diff_ev':
         if bounds is None:
             raise ValueError("Bounds are required for differential evolution")
-        
+
         # Convert bounds format if needed
         clean_bounds = []
         for bound in bounds:
@@ -646,12 +643,12 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
             lower = -1e6 if (bound[0] == -np.inf or bound[0] == None) else bound[0]
             upper = 1e6 if (bound[1] == -np.inf or bound[1] == None) else bound[1]
             clean_bounds.append((lower, upper))
-        
+
 
         result = differential_evolution(
             func=combined_loss_function,
             bounds=clean_bounds,
-            args=(C_t_observed_dict, times_dict, noise_profile, param_structure, 
+            args=(C_t_observed_dict, times_dict, noise_profile, param_structure,
                   fixed_kwargs_dict, n_values, delta, loss_type, noise_level),
             constraints=constraints if constraints else (),  # Add constraints here
             strategy='best1bin',
@@ -664,24 +661,24 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
             tol=1e-6,
             disp=True
         )
-        
+
     elif method == 'L-BFGS-B':
         try:
             result = minimize(
                 combined_loss_function,
                 np.array(flattened_initial_params),
-                args=(C_t_observed_dict, times_dict, noise_profile, param_structure, 
+                args=(C_t_observed_dict, times_dict, noise_profile, param_structure,
                       fixed_kwargs_dict, n_values, delta, loss_type, noise_level),
                 bounds=bounds,
                 constraints=constraints if constraints else (),  # Add constraints here
                 method=method,
                 options={'ftol': 1e-6, 'gtol': 1e-5, 'maxls': 100}
             )
-        except Exception as e:
+        except Exception:
             result = minimize(
                 combined_loss_function,
                 np.array(flattened_initial_params),
-                args=(C_t_observed_dict, times_dict, noise_profile, param_structure, 
+                args=(C_t_observed_dict, times_dict, noise_profile, param_structure,
                       fixed_kwargs_dict, n_values, delta, loss_type, noise_level),
                 bounds=bounds,
                 constraints=constraints if constraints else (),  # Add constraints here
@@ -691,7 +688,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
         result = minimize(
             combined_loss_function,
             np.array(flattened_initial_params),
-            args=(C_t_observed_dict, times_dict, noise_profile, param_structure, 
+            args=(C_t_observed_dict, times_dict, noise_profile, param_structure,
                   fixed_kwargs_dict, n_values, delta, loss_type, noise_level),
             bounds=bounds,
             constraints=constraints if constraints else (),  # Add constraints here
@@ -703,12 +700,12 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
         result_x = np.array(result.x)
     else:
         result_x = result.x
-    
+
     # Reconstruct the optimized args
     optimized_args = []
     optimized_errors = []  # Placeholder for now
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -717,7 +714,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         optimized_args.append(new_dict)
-    
+
     # Verify constraints are satisfied (if they were applied)
     if use_constraints and Ndpl > 0:
         print("\nConstraint verification:")
@@ -729,7 +726,7 @@ def fit_coherence_decay_combined(C_t_observed_dict, times_dict, noise_profile, i
                     constraint_satisfied = beta_val > alpha_val
                     print(f"Component {j}: beta={beta_val:.6f}, alpha={alpha_val:.6f}, "
                           f"beta > alpha: {constraint_satisfied}")
-    
+
     return optimized_args, optimized_errors, result
 
 
@@ -752,7 +749,7 @@ def _global_loss_function(params, freq_points, S_w_observed, param_structure, lo
     # Reconstruct args from flattened params
     reconstructed_args = []
     param_index = 0
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -761,15 +758,15 @@ def _global_loss_function(params, freq_points, S_w_observed, param_structure, lo
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         reconstructed_args.append(new_dict)
-    
+
     # Calculate predicted noise spectrum
     try:
         S_w_pred = noise_spectrum_combination(freq_points, *reconstructed_args)
-        
+
         # Handle NaN or infinite values
         if np.any(np.isnan(S_w_pred)) or np.any(np.isinf(S_w_pred)):
             return 1e10
-        
+
         # Calculate loss
         if loss_type == 'mse':
             return mean_squared_error(S_w_observed, S_w_pred)
@@ -779,7 +776,7 @@ def _global_loss_function(params, freq_points, S_w_observed, param_structure, lo
             # return np.mean((np.log(S_w_observed) - np.log(S_w_pred))**2)
         elif loss_type == 'rel_mse':
             return mean_squared_error(S_w_observed/S_w_observed, S_w_pred/S_w_observed)
-            
+
     except Exception as e:
         print(f"Error in loss calculation: {e}")
         return 1e10
@@ -797,42 +794,42 @@ def create_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl):
     Outputs:
     - constraints: List of constraint dictionaries for scipy.optimize   
     """
-    
+
     constraints = []
-    
+
     if Ndpl > 0:
         # Find the indices for double power law parameters
         param_index = 0
-        
+
         # Skip 1/f noise parameters
         if N1f > 0:
             param_index += 2 * N1f  # A and alpha
-            
-        # Skip Lorentzian parameters  
+
+        # Skip Lorentzian parameters
         if Nlor > 0:
             param_index += 3 * Nlor  # beta, gamma, A
-            
+
         # Skip white noise parameters
         if NC > 0:
             param_index += NC  # C
-            
+
         # Now we're at double power law parameters
         # Order is: A, alpha, beta, gamma (repeated for each component)
         for i in range(Ndpl):
             # For each double power law component
             alpha_index = param_index + Ndpl + i  # alpha is second in the flattened array
             beta_index = param_index + 2*Ndpl + i  # beta is third
-            
+
             def constraint_func(params, alpha_idx=alpha_index, beta_idx=beta_index):
                 """beta > alpha constraint with small tolerance"""
                 return params[beta_idx] - params[alpha_idx] - 1e-6
-            
+
             constraint = NonlinearConstraint(constraint_func, 0, np.inf)
             constraints.append(constraint)
-    
+
     return constraints
 
-def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0, 
+def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
                       bounds=None, method='L-BFGS-B', loss_type='mse', use_constraints=True, population=5000, iterations=1000):
     """
     Fit noise_spectrum_combination to observed noise spectrum data.
@@ -865,12 +862,12 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
     tuple
         (optimized_args, optimization_result)
     """
-    
+
     # Create initial parameter structure
     initial_args = []
     param_structure = []
     flattened_initial_params = []
-    
+
     # 1/f noise parameters
     if N1f > 0:
         f_params = {'A': [10.0] * N1f, 'alpha': [1.0] * N1f}
@@ -880,7 +877,7 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
     else:
         initial_args.append({})
         param_structure.append({})
-    
+
     # Lorentzian parameters
     if Nlor > 0:
         lor_params = {'beta': [1.0] * Nlor, 'gamma': [1.0] * Nlor, 'A': [1.0] * Nlor}
@@ -890,7 +887,7 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
     else:
         initial_args.append({})
         param_structure.append({})
-    
+
     # White noise parameters
     if NC > 0:
         white_params = {'C': [1.0] * NC}
@@ -900,11 +897,11 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
     else:
         initial_args.append({})
         param_structure.append({})
-    
+
     # double power law parameters
     if Ndpl > 0:
         # Modified initial values to satisfy beta > alpha constraint
-        cf_params = {'A': [1.0] * Ndpl, 'alpha': [1.0] * Ndpl, 
+        cf_params = {'A': [1.0] * Ndpl, 'alpha': [1.0] * Ndpl,
                     'beta': [2.0] * Ndpl, 'gamma': [50] * Ndpl}  # beta > alpha initially
         initial_args.append(cf_params)
         param_structure.append({'A': Ndpl, 'alpha': Ndpl, 'beta': Ndpl, 'gamma': Ndpl})
@@ -912,7 +909,7 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
     else:
         initial_args.append({})
         param_structure.append({})
-    
+
     # Set default bounds if not provided
     if bounds is None:
         bounds = []
@@ -930,13 +927,13 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
         bounds.extend([(1e-6, 10)] * Ndpl)      # alpha bounds (min > 0 for constraint)
         bounds.extend([(1e-5, 20)] * Ndpl)   # beta bounds (min > alpha_min)
         bounds.extend([(1e-10, 100)] * Ndpl)  # gamma bounds
-    
+
     # Create constraints if requested
     constraints = []
     if use_constraints and Ndpl > 0:
         constraints = create_parameter_constraints(param_structure, N1f, Nlor, NC, Ndpl)
         print(f"Created {len(constraints)} constraints for beta > alpha")
-    
+
     # Perform optimization
     if method == 'diff_ev':
         # Use differential evolution for global optimization
@@ -966,13 +963,13 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
             method=method,
             options={'ftol': 1e-6, 'gtol': 1e-5}
         )
-    
+
     # Reconstruct the optimized args
     optimized_args = []
     param_index = 0
-    
+
     result_x = np.array(result.x) if isinstance(result.x, list) else result.x
-    
+
     for param_dict in param_structure:
         new_dict = {}
         for key, length in param_dict.items():
@@ -981,7 +978,7 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
                 new_dict[key] = param_slice.tolist() if hasattr(param_slice, 'tolist') else list(param_slice)
                 param_index += length
         optimized_args.append(new_dict)
-    
+
     # Verify constraints are satisfied (if they were applied)
     if use_constraints and Ndpl > 0:
         print("\nConstraint verification:")
@@ -993,5 +990,5 @@ def fit_noise_spectrum(freq_points, S_w_observed, N1f=1, Nlor=0, NC=0, Ndpl=0,
                     constraint_satisfied = beta_val > alpha_val
                     print(f"Component {j}: beta={beta_val:.6f}, alpha={alpha_val:.6f}, "
                           f"beta > alpha: {constraint_satisfied}")
-    
+
     return optimized_args, result

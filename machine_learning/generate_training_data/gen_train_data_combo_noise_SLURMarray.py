@@ -1,32 +1,28 @@
+import fcntl
 import os
-import sys
-import psutil
-from math import ceil, fsum
-import numpy as np
-import numba as nb
-import matplotlib.pyplot as plt
-import time
-
 import random
-
-from scipy.signal import find_peaks
-from scipy.integrate import quad, simpson, trapezoid, IntegrationWarning
-
-from scipy.stats import cauchy
-
-# import joblib
-from joblib import Parallel, delayed, parallel_backend
+import sys
+import time
+from contextlib import contextmanager
 
 # from tqdm import tqdm, trange
 # from tqdm.contrib import tenumerate
+from itertools import combinations, product
+from math import ceil
 
-from itertools import product, combinations
+import numba as nb
+import numpy as np
 
 # import h5py
 import pandas as pd
-import fcntl
-import time
-from contextlib import contextmanager
+import psutil
+
+# import joblib
+from joblib import Parallel, delayed, parallel_backend
+from scipy.integrate import quad, simpson, trapezoid
+from scipy.signal import find_peaks
+from scipy.stats import cauchy
+
 
 # Custom Exception Classes
 class ParallelExecutionError(Exception):
@@ -66,7 +62,7 @@ def noise_spectrum_1f(omega, A, alpha):
     '''
     return np.divide(A, np.power(omega, alpha))
 
-# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact 
+# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact
 # on the performance of the function. The scipy function should be more stable and has better numerical precision, but I have also provided a numba implementation
 # that should do the same thing (but please check).
 def noise_spectrum_lor(omega, omega_0, gamma,A):
@@ -96,12 +92,12 @@ def noise_spectrum_lor(omega, omega_0, gamma,A):
 #     '''
 #     # Preallocate the result array
 #     result = np.empty_like(omega, dtype=np.float64)
-    
+
 #     # Compute Lorentzian (Cauchy) distribution manually
 #     for i in range(len(omega)):
 #         # Equivalent to scipy.stats.cauchy.pdf(x, loc=omega_0, scale=gamma)
 #         result[i] = A / (np.pi * gamma * (1 + ((omega[i] - omega_0) / gamma)**2))
-    
+
 #     return result
 
 @nb.njit(parallel=False)
@@ -142,7 +138,7 @@ def noise_spectrum_combo(omega,f_params,lor_params,white_params):
                     raise ValueError('All the parameters in the dictionary must have the same length.')
         else:
             first_length = 0
-        
+
         if my_dict == f_params:
             if first_length != 0:
                 f_values  = list(zip(my_dict["A"], my_dict["alpha"]))
@@ -200,7 +196,7 @@ def filter_function_approx(omega, N, T):
     '''
     if not isinstance(N, int):
         raise TypeError(f"N must be an integer, got {type(N).__name__}")
-    
+
     if N % 2 == 0:
         return 16 * (np.sin((omega*T) / 2) ** 2) * (np.sin((omega*T)/(4*N))**4) / (np.cos((omega*T)/(2*N))**2)
     else:
@@ -236,14 +232,14 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
         t_k = T/(2*N)*np.arange(1,2*N+1,2) # Pulses are evenly spaced. This is the middle of the each pulse. Alternatively, np.linspace((T/N)/2, T*(1-1/(2*N)), N)
         if (t_k<0).any():
             raise ValueError("One of the Pulse start times is negative. This is not allowed.")
-        
+
     if method == 'numba':
         # Uses numba to speed up the sum. Should be the fastest implementation.
         # Doesn't store the intermediate results, so it's memory efficient.
         sum_term = numba_complex_sum(t_k, omega)
     elif method == 'numpy_array':
-        # Uses numpy array broadcasting to vectorize the sum. 
-        # A little faster that a summation loop, and more numerically stable, but has a higher memory overhead. 
+        # Uses numpy array broadcasting to vectorize the sum.
+        # A little faster that a summation loop, and more numerically stable, but has a higher memory overhead.
         sum_array = np.exp(1j * omega[:, np.newaxis] * t_k)
         sum_array[:,::2] *= -1 # Adds negative sign to odd indices of t_k
         # sum_array.sort(axis=1)
@@ -257,19 +253,19 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
         # for k in range(0,N,2):
         #     # neg_sum_term = neg_sum_term - np.exp(1j * omega * t_k[k])
         #     neg_sum_term = np.sum(np.vstack((neg_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
-            
+
         # for k in range(1,N+1,2):
         #     # pos_sum_term = pos_sum_term + np.exp(1j * omega * t_k[k])
         #     pos_sum_term = np.sum(np.vstack((pos_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
 
         # sum_term = (pos_sum_term-neg_sum_term)
-            
+
         sum_term = np.zeros(omega.shape)
         for k in range(N):
             sum_term += ((-1)**(k+1)) * np.exp(1j * omega * t_k[k])
-    
+
     result = np.power(np.abs(1 + np.power(-1,N+1) * np.exp(1j * omega * T) + 2 * np.cos(omega * tau_p / 2) * sum_term),2)
-    
+
     return result
 
 def monitor_memory():
@@ -297,17 +293,17 @@ def find_k_largest_peaks(arr, k):
     """
     # Find all peaks
     peaks, _ = find_peaks(arr)
-    
+
     # Get peak heights
     peak_heights = arr[peaks]
-    
+
     # Sort peaks by height in descending order
     sorted_peak_indices = np.argsort(peak_heights)[::-1]
-    
+
     # Select k largest peaks
     k_largest_peak_indices = peaks[sorted_peak_indices[:k]]
     k_largest_peak_heights = peak_heights[sorted_peak_indices[:k]]
-    
+
     return k_largest_peak_indices, k_largest_peak_heights
 
 def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_profile, *args, max_memory_mb=15000, **kwargs):
@@ -328,14 +324,14 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     """
     if not (isinstance(N, int) and N > 0):
         raise TypeError(f"N must be a positive integer, got {type(N).__name__}")
-    
+
     if kwargs.get('num_peaks_cutoff'):
         if not (isinstance(kwargs['num_peaks_cutoff'], int) and kwargs['num_peaks_cutoff'] >= 0):
             raise TypeError(f"num_peaks_cutoff must be a positive integer, got {type(kwargs['num_peaks_cutoff']).__name__}")
-        
+
     current_memory = monitor_memory()
     if current_memory > max_memory_mb:
-        raise MemoryError(f"Memory usage ({current_memory}MB) exceeded threshold")   
+        raise MemoryError(f"Memory usage ({current_memory}MB) exceeded threshold")
 
     try:
         omegas = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), 10**7) # setting resolution to 10^8 points. Might be a little overkill
@@ -389,7 +385,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         for index in largest_peak_indices:
             if kwargs.get("peak_resolution"):
             # Joonhee says that the width of the peaks should scale as O(1/N)
-            # Using 1/N here is not percise, for low values of N, it can lead to negative values of omega being added to omega_values (i.e. peak_width/2 > peak), which I 
+            # Using 1/N here is not percise, for low values of N, it can lead to negative values of omega being added to omega_values (i.e. peak_width/2 > peak), which I
             # correct for by removing negative values below. A more sophisticated approach would be to use a peak width that scales with N.
                 peak = omega_values[index]
                 peak_width = 1/N # Width in indices
@@ -397,27 +393,27 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
                 # Otherwise, add additional points around the peak, if no resolution is specified, use 10 points.
                 peak_res = kwargs.get("peak_resolution", 10)
 
-                # You could opt to use a logspace around the peak, but I went with a linear space for now. Have to fix issue where peak_width/2 > peak, which would require a 
+                # You could opt to use a logspace around the peak, but I went with a linear space for now. Have to fix issue where peak_width/2 > peak, which would require a
                 # more sophisticated approach to setting peak_width.
                 # additional_omega_values.append(omega_values, np.logspace(np.log10(peak-peak*peak_width), np.log10(peak+peak*peak_width), peak_res))
                 additional_omega_values = np.append(additional_omega_values,np.linspace(peak-peak*peak_width, peak+peak*peak_width, peak_res))
-                
+
         additional_omega_values = additional_omega_values[additional_omega_values > 0] # Remove non-positive values to be safe. Important when N=1 to avoid devide by zero errors.
         additional_filter_values = filter_function_finite(additional_omega_values, N, t, tau_p)
         additional_integrand = np.multiply(additional_filter_values, np.divide(noise_profile(additional_omega_values, *args),(np.power(additional_omega_values,2))))
 
-        
+
         # Concatenate and get unique, sorted omega values
         merged_omega_values = np.sort(np.unique(np.concatenate((omega_values, additional_omega_values))))
         # Create merged filter values array
         merged_integrand = np.zeros_like(merged_omega_values, dtype=integrand.dtype)
         merged_filter_values = np.zeros_like(merged_omega_values, dtype=filter_values.dtype)
-        
+
         # Find indices of original omega values in merged array
         original_indices = np.searchsorted(merged_omega_values, omega_values)
         merged_integrand[original_indices] = integrand
         merged_filter_values[original_indices] = filter_values
-        
+
         # Find indices of new omega values in merged array
         new_indices = np.searchsorted(merged_omega_values, additional_omega_values)
         merged_integrand[new_indices] = additional_integrand
@@ -426,7 +422,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         omega_values = merged_omega_values
         integrand = merged_integrand
         filter_values = merged_filter_values
-    
+
         # print("Range of Omega Values: ", np.format_float_scientific(np.min(omega_values)), np.format_float_scientific(np.max(omega_values)))
 
     if method == "quad":
@@ -438,28 +434,28 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         # with warnings.catch_warnings():
         #     warnings.filterwarnings('ignore', category=IntegrationWarning)
         chi_t = 0
-        chi_t_i, _ = quad(integrand, 0, breakpoints[0], 
-                    limit=kwargs.get('quad_limit',len(breakpoints)+10), 
+        chi_t_i, _ = quad(integrand, 0, breakpoints[0],
+                    limit=kwargs.get('quad_limit',len(breakpoints)+10),
                     points=[0,breakpoints[0]],
                     epsabs=kwargs.get('epsabs', 1.49e-8),
                     epsrel=kwargs.get('epsrel', 1.49e-8))
         chi_t += chi_t_i
         for i in range(len(breakpoints)-1):
-            chi_t_i, _ = quad(integrand, breakpoints[i], breakpoints[i+1], 
-                                limit=kwargs.get('quad_limit',len(breakpoints)+10), 
+            chi_t_i, _ = quad(integrand, breakpoints[i], breakpoints[i+1],
+                                limit=kwargs.get('quad_limit',len(breakpoints)+10),
                                 points=[breakpoints[i],breakpoints[i+1]],
                                 epsabs=kwargs.get('epsabs', 1.49e-8),
                                 epsrel=kwargs.get('epsrel', 1.49e-8))
             chi_t += chi_t_i
-            
+
         chi_t = chi_t/(np.pi)
 
         return np.exp(-chi_t), omega_values, filter_values, integrand(omega_values)/(np.pi)  # No omega_values, filter_values, or integrand for quad method
-    else:     
+    else:
 
         # integrand = np.multiply(filter_values, np.divide(noise_profile(omega_values, *args),(np.power(omega_values,2))))
 
-        # I'm using the "trapezoid" method because it's error has better scaling with the size of the step size of x values, which 
+        # I'm using the "trapezoid" method because it's error has better scaling with the size of the step size of x values, which
         # is large since we are using log spacing for points.
         if method == "simpson":
             chi_t = simpson(integrand, x=omega_values)
@@ -467,12 +463,12 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             chi_t = trapezoid(integrand, x=omega_values)
         else:
             raise ValueError(f"Unknown method: {method}")
-        
+
 
         chi_t = chi_t/(np.pi)
-        
+
         return np.exp(-chi_t), omega_values, filter_values, integrand/(np.pi)
-    
+
 def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, min_n_jobs=1):
     """
     Decorator that implements retry logic with CPU reduction for parallel execution.
@@ -492,10 +488,10 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                 max_retry_attempts = n_jobs - min_n_jobs + 1
             else:
                 max_retry_attempts = max_retries
-            
+
             attempt = 0
             current_n_jobs = n_jobs
-            
+
             while attempt < max_retry_attempts and current_n_jobs >= min_n_jobs:
                 try:
                     kwargs['n_jobs'] = current_n_jobs
@@ -503,12 +499,12 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                     result = f(*args, **kwargs)
                     print(f"Successfully completed using {current_n_jobs} CPU{'s' if current_n_jobs > 1 else ''}")
                     return result
-                
+
                 except Exception as e:
                     if "SIGKILL" in str(e) or isinstance(e, MemoryError):
                         attempt += 1
                         current_n_jobs -= 1
-                        
+
                         if current_n_jobs >= min_n_jobs:
                             print(f"\nExecution failed with {current_n_jobs + 1} CPUs: {str(e)}")
                             print(f"Retrying with {current_n_jobs} CPU{'s' if current_n_jobs > 1 else ''}...")
@@ -521,7 +517,7 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                     else:
                         # If it's not a SIGKILL or MemoryError, re-raise the original exception
                         raise
-            
+
             raise ParallelExecutionError(
                 f"Exceeded maximum retry attempts ({max_retry_attempts}) or minimum CPU count reached"
             )
@@ -570,26 +566,26 @@ def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jo
 
     def process_batch(batch):
         return [coherence_decay_profile_finite_peaks_with_widths(
-            t, N, tau_p, method, noise_profile, *args, 
-            max_memory_mb=max_memory_per_worker, **kwargs) 
+            t, N, tau_p, method, noise_profile, *args,
+            max_memory_mb=max_memory_per_worker, **kwargs)
                 for t in batch]
-    
+
     with parallel_backend('loky', n_jobs=n_jobs):
     # with parallel_backend('loky', n_jobs=n_jobs, inner_max_num_threads=1): # Use this line if you are using numpy or scipy functions that are not thread-safe
         results_nested = Parallel(verbose=1)(
-            delayed(process_batch)(batch) 
+            delayed(process_batch)(batch)
             for batch in time_batches
         )
-    
+
     # Flatten results and filter out None values
     results = [r for batch in results_nested for r in batch if r is not None]
-    
+
     if not results:
         raise RuntimeError("No valid results were produced")
-    
+
     # Unpack the results
     C_t, omega_values_list, filter_values_list, integrand_list = zip(*results)
-    
+
     return (np.array(C_t), omega_values_list, filter_values_list, integrand_list)
 
 ##### GENERATE TRAINING SET #####
@@ -603,7 +599,7 @@ def generate_training_data_delta(t_points, noise_profile, *args):
         noise = noise_profile(np.pi/t_points, *params)
         C_t = coherence_decay_profile_delta(t_points, noise)
         C_t_list.append([C_t,noise,params])
-    
+
     return C_t_list
 
 # @retry_parallel_execution
@@ -635,17 +631,17 @@ def generate_training_data_finite(times,parameters, n, tau_p, method, noise_prof
         noise_spectrum: numpy array of noise spectrum
         params: specific parameter combination
     """
-    
+
     # Prepare omega values for noise spectrum
     try:
         omega = np.logspace(
-            np.log10(integration_params.get("omega_range")[0]), 
-            np.log10(integration_params.get("omega_range")[1]), 
+            np.log10(integration_params.get("omega_range")[0]),
+            np.log10(integration_params.get("omega_range")[1]),
             integration_params.get("omega_resolution", 10**5)
         )
     except KeyError:
         omega = np.logspace(-4, 8, integration_params.get("omega_resolution", 10**5))
-    
+
     C_t_list = []
     for params in parameters:
         if int(os.getenv("SLURM_CPUS_PER_TASK")) > 1:
@@ -717,7 +713,7 @@ def make_and_save_training_data(t_points, save_every_n, num_samples, noise_profi
     # Initialize existing parameters set
     existing_params = []
 
-    n = kwargs.pop('N', None) 
+    n = kwargs.pop('N', None)
     tau_p = kwargs.pop('tau_p', None)
     integration_method = kwargs.pop('integration_method', None)
 
@@ -745,11 +741,11 @@ def make_and_save_training_data(t_points, save_every_n, num_samples, noise_profi
     all_parameters = list(rng.sample(parameters_list, np.min((num_samples,len(parameters_list)))))
 
     parameters = [param for param in all_parameters if param not in existing_params]
-    
+
     if not parameters:
         print(f"Task {task_id}: All parameters already exist in the dataset. Nothing to compute.")
         return
-        
+
     print(f"Task {task_id}: After removing existing parameters, {len(parameters)} parameters remain to be computed.")
     # Divide parameters among tasks
     # Calculate base distribution and remainder
@@ -775,7 +771,7 @@ def make_and_save_training_data(t_points, save_every_n, num_samples, noise_profi
     if not new_parameters:
         print(f"Task {task_id}: No new parameters to compute.")
         return
-    
+
     # Define batch size for parameter groups
     batch_size = save_every_n
     num_batches = (len(new_parameters) + batch_size - 1) // batch_size
@@ -788,7 +784,7 @@ def make_and_save_training_data(t_points, save_every_n, num_samples, noise_profi
         param_subset = new_parameters[start_idx:end_idx]
 
         # Generate data for the current subset
-        data_subset = generate_training_data_finite(t_points, param_subset, n, tau_p, 
+        data_subset = generate_training_data_finite(t_points, param_subset, n, tau_p,
                                                   integration_method, noise_profile, **kwargs)
 
         # Prepare batch data
@@ -815,10 +811,10 @@ def make_and_save_training_data(t_points, save_every_n, num_samples, noise_profi
                 new_X = pd.DataFrame(batch_X)
                 # new_Y = pd.DataFrame(batch_Y)
                 new_params = pd.DataFrame(batch_params)
-                
+
                 store['data'] = pd.concat([existing_X, new_X], ignore_index=True)
                 store['noise_profile_args'] = pd.concat([existing_params, new_params], ignore_index=True)
-                
+
                 # Store metadata if not exists
                 if 'noise_profile' not in store:
                     store['noise_profile'] = pd.Series([str(noise_profile.__name__)])
@@ -845,7 +841,7 @@ alpha_values = np.unique(alpha_values)[::-1]
 # Lorentzian noise parameters
 num_samples_lor = 10**4
 omega_0_values = np.linspace(1, 50*1e6, ceil(num_samples_lor**(1/3)),dtype=np_data_type)  # Adjust the number of points as needed
-gamma_values = np.linspace(0.1, 10*1e6, ceil(num_samples_lor**(1/3)),dtype=np_data_type)  # Adjust the number of points as needed 
+gamma_values = np.linspace(0.1, 10*1e6, ceil(num_samples_lor**(1/3)),dtype=np_data_type)  # Adjust the number of points as needed
 lor_A_values = np.linspace(0, 10, ceil(num_samples_lor**(1/3)),dtype=np_data_type)  # Adjust the number of points as needed
 # Ensures that the parameters are all unique , and sorted. Not necessary, but convenient.
 omega_0_values = np.unique(omega_0_values)[::-1]

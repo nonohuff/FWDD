@@ -40,3 +40,15 @@ Repository = "https://github.com/nonohuff/FWDD/tree/main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fwdd*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

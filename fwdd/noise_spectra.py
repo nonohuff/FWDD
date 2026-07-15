@@ -1,5 +1,5 @@
-import numpy as np
 import numba as nb
+import numpy as np
 from scipy.stats import cauchy
 
 #define the functions to have different kinds of noise
@@ -10,7 +10,7 @@ from scipy.stats import cauchy
 # This file defines the various noise spectra functions that can be used to model different types of noise in a system.
 # The functions are designed to handle numpy arrays of angular frequencies, but can also handle single values.
 # The functions return numpy arrays of the noise spectrum values.
-# The function noise_spectrum_combination allows for the combination of different noise spectra so that the result is a sum of the individual spectra. 
+# The function noise_spectrum_combination allows for the combination of different noise spectra so that the result is a sum of the individual spectra.
 # You can even specify multiple instances of the same noise type, e.g. two 1/f noise spectra with different amplitudes and exponents.
 
 # If you add a new noise spectrum, I reccommend you to add it to the noise_spectrum_combination function, and pass that to any of the C(t) functions, so that you can use it in the same way as the other noise spectra.
@@ -32,7 +32,7 @@ def noise_spectrum_1f(omega, A, alpha):
     '''
     return np.divide(A, np.power(omega, alpha))
 
-# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact 
+# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact
 # on the performance of the function. The scipy function should be more stable and has better numerical precision, but I have also provided a numba implementation
 # that should do the same thing (but please check).
 def noise_spectrum_lor(omega, omega_0, gamma,A):
@@ -62,12 +62,12 @@ def noise_spectrum_lor(omega, omega_0, gamma,A):
 #     '''
 #     # Preallocate the result array
 #     result = np.empty_like(omega, dtype=np.float64)
-    
+
 #     # Compute Lorentzian (Cauchy) distribution manually
 #     for i in range(len(omega)):
 #         # Equivalent to scipy.stats.cauchy.pdf(x, loc=omega_0, scale=gamma)
 #         result[i] = A / (np.pi * gamma * (1 + ((omega[i] - omega_0) / gamma)**2))
-    
+
 #     return result
 
 @nb.njit(parallel=False)
@@ -98,11 +98,11 @@ def noise_spectrum_double_power_law(omega, A, alpha, beta, gamma):
     """
 
     assert beta > alpha, f"beta ({beta}) must be greater than alpha ({alpha})"
-    
+
     inner_fraction = (omega) / gamma
 
     power_result = inner_fraction**(beta-alpha)
-    
+
     denominator = 1 + power_result
     result = A / (denominator*omega**alpha)
 
@@ -136,7 +136,7 @@ def noise_spectrum_combination(omega,f_params,lor_params,white_params, double_po
                     raise ValueError('All the parameters in the dictionary must have the same length.')
         else:
             first_length = 0
-        
+
         # if (my_dict == f_params and i==0):
         if i == 0:
             if first_length != 0:

@@ -1,4 +1,10 @@
 # FWDD
+
+[![PyPI version](https://img.shields.io/pypi/v/fwdd.svg)](https://pypi.org/project/fwdd/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/fwdd.svg)](https://anaconda.org/conda-forge/fwdd)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI Build](https://github.com/nonohuff/FWDD/actions/workflows/test.yml/badge.svg)](https://github.com/nonohuff/FWDD/actions)
+
 FWDD (Finite Width Dynamical Decoupling) implements Dynamical Decoupling considering the effects of FInite Pulse Widths. All times in the tutorials use microseconds $(\mu s)$. 
 
 The code presented here is used in the paper [Quantum sensing with a spin ensemble in a two-dimensional material](http://arxiv.org/abs/2509.08984) to predict noise spectra.
@@ -79,4 +85,20 @@ We have included several tutorial notebooks to make adapting this code to your p
 # Conventions
 * $\omega = 2 \pi f$
 * $t = \frac{1}{f}$
-* Time varibles assume microseconds, so `tau_p = 0.024` means $0.024 \mu s$ or $24 ns$ 
+* Time varibles assume microseconds, so `tau_p = 0.024` means $0.024 \mu s$ or $24 ns$
+
+# Citation
+
+If you use `fwdd` in your research, please cite our work:
+
+```bibtex
+@misc{biswas2025quantum,
+  title = {Quantum sensing with a spin ensemble in a two-dimensional material},
+  author = {Souvik Biswas and Giovanni Scuri and Noah Huffman and Eric I. Rosenthal and Ruotian Gong and Thomas Poirier and Xingyu Gao and Sumukh Vaidya and Abigail J. Stein and Tsachy Weissman and James H. Edgar and Tongcang Li and Chong Zu and Jelena Vučković and Joonhee Choi},
+  year = {2025},
+  eprint = {2509.08984},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.LG},
+  url = {https://arxiv.org/abs/2509.08984}
+}
+``` 

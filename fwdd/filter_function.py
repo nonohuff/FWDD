@@ -1,5 +1,6 @@
-import numpy as np
 import numba as nb
+import numpy as np
+
 
 @nb.njit(parallel=False)
 def filter_function_approx(omega, N, T):
@@ -12,9 +13,6 @@ def filter_function_approx(omega, N, T):
     Output:
     F(omega*t): a numpy array
     '''
-    if not isinstance(N, int):
-        raise TypeError(f"N must be an integer, got {type(N).__name__}")
-    
     if N % 2 == 0:
         return 16 * (np.sin((omega*T) / 2) ** 2) * (np.sin((omega*T)/(4*N))**4) / (np.cos((omega*T)/(2*N))**2)
     else:
@@ -46,18 +44,18 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
     if T < N * tau_p:
         raise ValueError("The total time of the experiment is less than the total time of the pulses.")
     else:
-        # t_k = np.linspace((T/N-tau_p)/2, T*(1-1/(2*N))-(tau_p/2), N)  # Pulses are evenly spaced. This is the time of beginning of each pulse. This should not be used, but I'm leaving in as a comment in case you need the beggining pulse timings for something else. 
+        # t_k = np.linspace((T/N-tau_p)/2, T*(1-1/(2*N))-(tau_p/2), N)  # Pulses are evenly spaced. This is the time of beginning of each pulse. This should not be used, but I'm leaving in as a comment in case you need the beggining pulse timings for something else.
         t_k = T/(2*N)*np.arange(1,2*N+1,2) # Pulses are evenly spaced. This is the middle of the each pulse. Alternatively, np.linspace((T/N)/2, T*(1-1/(2*N)), N)
         if (t_k<0).any():
             raise ValueError("One of the Pulse start times is negative. This is not allowed.")
-        
+
     if method == 'numba':
         # Uses numba to speed up the sum. Should be the fastest implementation.
         # Doesn't store the intermediate results, so it's memory efficient.
         sum_term = numba_complex_sum(t_k, omega)
     elif method == 'numpy_array':
-        # Uses numpy array broadcasting to vectorize the sum. 
-        # A little faster than a summation loop, and more numerically stable, but has a higher memory overhead. 
+        # Uses numpy array broadcasting to vectorize the sum.
+        # A little faster than a summation loop, and more numerically stable, but has a higher memory overhead.
         sum_array = np.exp(1j * omega[:, np.newaxis] * t_k)
         sum_array[:,::2] *= -1 # Adds negative sign to odd indices of t_k
         # sum_array.sort(axis=1)
@@ -71,17 +69,17 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
         # for k in range(0,N,2):
         #     # neg_sum_term = neg_sum_term - np.exp(1j * omega * t_k[k])
         #     neg_sum_term = np.sum(np.vstack((neg_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
-            
+
         # for k in range(1,N+1,2):
         #     # pos_sum_term = pos_sum_term + np.exp(1j * omega * t_k[k])
         #     pos_sum_term = np.sum(np.vstack((pos_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
 
         # sum_term = (pos_sum_term-neg_sum_term)
-            
+
         sum_term = np.zeros(omega.shape, dtype=np.complex128)
         for k in range(N):
             sum_term += ((-1)**(k+1)) * np.exp(1j * omega * t_k[k])
-    
+
     result = np.power(np.abs(1 + np.power(-1,N+1) * np.exp(1j * omega * T) + 2 * np.cos(omega * tau_p / 2) * sum_term),2)
-    
+
     return result

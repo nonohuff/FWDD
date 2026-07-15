@@ -1,17 +1,15 @@
 import os
-import psutil
 import time
 
-import numpy as np
 import numba as nb
-
-import joblib
+import numpy as np
+import psutil
 from joblib import Parallel, delayed, parallel_backend
-
+from scipy.integrate import quad, simpson, trapezoid
 from scipy.signal import find_peaks
-from scipy.integrate import quad, simpson, trapezoid, IntegrationWarning
 
 from . import filter_function as ff
+
 
 # Custom Exception Classes
 class ParallelExecutionError(Exception):
@@ -74,21 +72,21 @@ def find_k_largest_peaks(arr, k):
     """
     # Find all peaks
     peaks, _ = find_peaks(arr)
-    
+
     # Get peak heights
     peak_heights = arr[peaks]
-    
+
     # Sort peaks by height in descending order
     sorted_peak_indices = np.argsort(peak_heights)[::-1]
-    
+
     # Select k largest peaks
     k_largest_peak_indices = peaks[sorted_peak_indices[:k]]
     k_largest_peak_heights = peak_heights[sorted_peak_indices[:k]]
-    
+
     return k_largest_peak_indices, k_largest_peak_heights
 
 
-##### 
+#####
 # Note on computing C(t):
 # Performing this integral is challenging due to the oscillatory nature of the integrand and the presence of sharp peaks and the log scaling of ω over which the noise can be relevant.
 # In order to tackle these challenges, we employ a combination of techniques, including adaptive quadrature and careful ω selection.
@@ -100,7 +98,7 @@ def find_k_largest_peaks(arr, k):
 #####
 
 
-### FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below. 
+### FYI, there are two hyperparameters that you currently can't feed into this function. "k = 10**4" and "M=100", explained below.
 # You can edit this function to make them passable parameters if you wish, or just edit them directly. ###
 def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_profile, *args, narrow_window = True, max_memory_mb=15000, **kwargs):
     """Computes the integral in eq #1 in [Meneses,Wise,Pagliero,et.al. 2022] exactly, considering finite pulse widths, which computes the Coherence decay profile, C(t). 
@@ -122,11 +120,11 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     """
     if not (isinstance(N, int) and N > 0):
         raise TypeError(f"N must be a positive integer, got {type(N).__name__}")
-    
+
     if kwargs.get('num_peaks_cutoff'):
         if not (isinstance(kwargs['num_peaks_cutoff'], int) and kwargs['num_peaks_cutoff'] >= 0):
             raise TypeError(f"num_peaks_cutoff must be a positive integer, got {type(kwargs['num_peaks_cutoff']).__name__}")
-        
+
     current_memory = monitor_memory()
     if current_memory > max_memory_mb:
         raise MemoryError(f"Memory usage ({current_memory}MB) exceeded threshold")
@@ -136,12 +134,12 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
     if narrow_window:
         old_range = kwargs.get("omega_range")  # Default range if not provided
         kwargs["omega_range"] = (0.5*N*np.pi/t,old_range[1]) # Set the lower bound of the omega range to 0.5*N*np.pi/tau_p
-     
+
     if callable(noise_profile): # If noise_profile is a function
         try:
             omegas = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), 10**7) # setting default resolution to 10^7 points. Might be a little overkill
         except KeyError:
-            omegas = np.logspace(-4, 8, 10**7) # setting resolution to 10^7 points. Might be a little overkill  
+            omegas = np.logspace(-4, 8, 10**7) # setting resolution to 10^7 points. Might be a little overkill
 
         S_w = noise_profile(omegas, *args)  # Check that the noise_profile function works with the omega_values
 
@@ -175,7 +173,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         additional_filter_peaks = base * (2*k_values + 1)
 
         try:
-            omega_sweep = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), kwargs.get("omega_resolution",10**5)) 
+            omega_sweep = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), kwargs.get("omega_resolution",10**5))
         except KeyError:
             omega_sweep = np.logspace(-4, 8, kwargs.get("omega_resolution",10**5))
 
@@ -186,7 +184,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
 
         integrand = np.multiply(filter_values, np.divide(noise_profile(omega_values, *args),(np.power(omega_values,2))))
 
-        # Now that we've computed the integrand once, we find the largest peaks in the integrand, which will contribute most to the integral. 
+        # Now that we've computed the integrand once, we find the largest peaks in the integrand, which will contribute most to the integral.
         largest_peak_indices, _ = find_k_largest_peaks(integrand, kwargs.get('num_peaks_cutoff', len(omega_values)))
 
         # for each of these peaks, we will add kwargs["peak_resolution"] additional ω points around them for more precise integration.
@@ -195,7 +193,7 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             for index in largest_peak_indices:
                 if kwargs.get("peak_resolution"):
                 # Joonhee says that the width of the peaks should scale as O(1/N)
-                # Using 1/N here is not percise, for low values of N, it can lead to negative values of omega being added to omega_values (i.e. peak_width/2 > peak), which I 
+                # Using 1/N here is not percise, for low values of N, it can lead to negative values of omega being added to omega_values (i.e. peak_width/2 > peak), which I
                 # correct for by removing negative values below. A more sophisticated approach would be to use a peak width that scales with N.
                     peak = omega_values[index]
                     peak_width = 1/N # Width in indices
@@ -203,11 +201,11 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
                     # Otherwise, add additional points around the peak, if no resolution is specified, use 10 points.
                     peak_res = kwargs.get("peak_resolution", 10)
 
-                    # You could opt to use a logspace around the peak, but I went with a linear space for now. Have to fix issue where peak_width/2 > peak, which would require a 
+                    # You could opt to use a logspace around the peak, but I went with a linear space for now. Have to fix issue where peak_width/2 > peak, which would require a
                     # more sophisticated approach to setting peak_width.
                     # additional_omega_values.append(omega_values, np.logspace(np.log10(peak-peak*peak_width), np.log10(peak+peak*peak_width), peak_res)) # uncomment if you wish to use logspace
                     additional_omega_values = np.append(additional_omega_values,np.linspace(peak-peak*peak_width, peak+peak*peak_width, peak_res))
-                    
+
             additional_omega_values = additional_omega_values[additional_omega_values > 0] # Remove non-positive values to be safe. Important when N=1 to avoid devide by zero errors.
             additional_filter_values = ff.filter_function_finite(additional_omega_values, N, t, tau_p)
             additional_integrand = np.multiply(additional_filter_values, np.divide(noise_profile(additional_omega_values, *args),(np.power(additional_omega_values,2))))
@@ -217,12 +215,12 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             # Create merged filter values array
             merged_integrand = np.zeros_like(merged_omega_values, dtype=integrand.dtype)
             merged_filter_values = np.zeros_like(merged_omega_values, dtype=filter_values.dtype)
-            
+
             # Find indices of original omega values in merged array
             original_indices = np.searchsorted(merged_omega_values, omega_values)
             merged_integrand[original_indices] = integrand
             merged_filter_values[original_indices] = filter_values
-            
+
             # Find indices of new omega values in merged array
             new_indices = np.searchsorted(merged_omega_values, additional_omega_values)
             merged_integrand[new_indices] = additional_integrand
@@ -231,11 +229,11 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             omega_values = merged_omega_values
             integrand = merged_integrand
             filter_values = merged_filter_values
-        
+
             # print("Range of Omega Values: ", np.format_float_scientific(np.min(omega_values)), np.format_float_scientific(np.max(omega_values)))
     else: # If the noise_profile the user specified is not a function, (i.e. tt's an array of the noise values at certain frequencies)
         # In this case, we don't get to re-define the frequency values to better evaluate the integral. Instead, we have to take the frequency points the user gives us.
-        # The default is to assume the frequency values are taken in logspace, and defined by kwargs["omega_range"] and kwargs["omega_resolution"]. If this is not the case, you will need to specify 
+        # The default is to assume the frequency values are taken in logspace, and defined by kwargs["omega_range"] and kwargs["omega_resolution"]. If this is not the case, you will need to specify
         # omega_values directly below.
         try:
             S_w = np.array(noise_profile)
@@ -243,9 +241,9 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
                 raise ValueError("The noise_profile must be a numerical object broadcastable numpy array.")
         except Exception as e:
             raise ValueError("The noise_profile must be a function or a numerical object broadcastable numpy array.") from e
-        
+
         try:
-            omega_values = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), kwargs.get("omega_resolution",len(S_w))) 
+            omega_values = np.logspace(np.log10(kwargs.get("omega_range")[0]), np.log10(kwargs.get("omega_range")[1]), kwargs.get("omega_resolution",len(S_w)))
         except KeyError:
             omega_values = np.logspace(-4, 8, kwargs.get("omega_resolution",len(S_w)))
 
@@ -264,28 +262,28 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
         # with warnings.catch_warnings():
         #     warnings.filterwarnings('ignore', category=IntegrationWarning)
         chi_t = 0
-        chi_t_i, _ = quad(integrand, 0, breakpoints[0], 
-                    limit=kwargs.get('quad_limit',len(breakpoints)+10), 
+        chi_t_i, _ = quad(integrand, 0, breakpoints[0],
+                    limit=kwargs.get('quad_limit',len(breakpoints)+10),
                     points=[0,breakpoints[0]],
                     epsabs=kwargs.get('epsabs', 1.49e-8),
                     epsrel=kwargs.get('epsrel', 1.49e-8))
         chi_t += chi_t_i
         for i in range(len(breakpoints)-1):
-            chi_t_i, _ = quad(integrand, breakpoints[i], breakpoints[i+1], 
-                                limit=kwargs.get('quad_limit',len(breakpoints)+10), 
+            chi_t_i, _ = quad(integrand, breakpoints[i], breakpoints[i+1],
+                                limit=kwargs.get('quad_limit',len(breakpoints)+10),
                                 points=[breakpoints[i],breakpoints[i+1]],
                                 epsabs=kwargs.get('epsabs', 1.49e-8),
                                 epsrel=kwargs.get('epsrel', 1.49e-8))
             chi_t += chi_t_i
-            
+
         chi_t = chi_t/(np.pi)
 
         return np.exp(-chi_t), omega_values, filter_values, integrand(omega_values)/(np.pi)  # No omega_values, filter_values, or integrand for quad method
-    else:     
+    else:
 
         # integrand = np.multiply(filter_values, np.divide(noise_profile(omega_values, *args),(np.power(omega_values,2))))
 
-        # I'm using the "trapezoid" method because it's error has better scaling with the size of the step size of x values, which 
+        # I'm using the "trapezoid" method because it's error has better scaling with the size of the step size of x values, which
         # is large since we are using log spacing for points.
         if method == "simpson":
             chi_t = simpson(integrand, x=omega_values)
@@ -293,20 +291,20 @@ def coherence_decay_profile_finite_peaks_with_widths(t, N, tau_p, method, noise_
             chi_t = trapezoid(integrand, x=omega_values)
         else:
             raise ValueError(f"Unknown method: {method}")
-        
+
 
         chi_t = chi_t/(np.pi)
-        
-        return np.exp(-chi_t), omega_values, filter_values, integrand/(np.pi)
-    
 
-### 
+        return np.exp(-chi_t), omega_values, filter_values, integrand/(np.pi)
+
+
+###
 # The rest of the functions in this document implement CPU parallelism for computing the coherence profile, C(t), via coherence_decay_profile_finite_peaks_with_widths
 # Since, in general, we want to compute C(t) over an array of timepoints, this can be computationally annoying as the filter function, F(omega,t) changes for each time point,
-# so, we must re-compute the integral for each of these timepoints. Fortunately, these computations are independent of one another, so we can parallelize across these timepoints, and 
+# so, we must re-compute the integral for each of these timepoints. Fortunately, these computations are independent of one another, so we can parallelize across these timepoints, and
 # use every CPU available to us, rather than just one.
 ###
-    
+
 def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, min_n_jobs=1):
     """
     Decorator that implements retry logic with CPU reduction for parallel execution.
@@ -326,10 +324,10 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                 max_retry_attempts = n_jobs - min_n_jobs + 1
             else:
                 max_retry_attempts = max_retries
-            
+
             attempt = 0
             current_n_jobs = n_jobs
-            
+
             while attempt < max_retry_attempts and current_n_jobs >= min_n_jobs:
                 try:
                     kwargs['n_jobs'] = current_n_jobs
@@ -337,12 +335,12 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                     result = f(*args, **kwargs)
                     # print(f"Successfully completed using {current_n_jobs} CPU{'s' if current_n_jobs > 1 else ''}")
                     return result
-                
+
                 except Exception as e:
                     if "SIGKILL" in str(e) or isinstance(e, MemoryError):
                         attempt += 1
                         current_n_jobs -= 1
-                        
+
                         if current_n_jobs >= min_n_jobs:
                             print(f"\nExecution failed with {current_n_jobs + 1} CPUs: {str(e)}")
                             print(f"Retrying with {current_n_jobs} CPU{'s' if current_n_jobs > 1 else ''}...")
@@ -355,7 +353,7 @@ def retry_parallel_execution(func=None, max_retries=None, initial_n_jobs=None, m
                     else:
                         # If it's not a SIGKILL or MemoryError, re-raise the original exception
                         raise
-            
+
             raise ParallelExecutionError(
                 f"Exceeded maximum retry attempts ({max_retry_attempts}) or minimum CPU count reached"
             )
@@ -404,25 +402,25 @@ def parallel_coherence_decay(times, N, tau_p, method, noise_profile, *args, n_jo
 
     def process_batch(batch):
         return [coherence_decay_profile_finite_peaks_with_widths(
-            t, N, tau_p, method, noise_profile, *args, 
-            narrow_window = narrow_window, max_memory_mb=max_memory_per_worker, **kwargs) 
+            t, N, tau_p, method, noise_profile, *args,
+            narrow_window = narrow_window, max_memory_mb=max_memory_per_worker, **kwargs)
                 for t in batch]
-    
+
     with parallel_backend('loky', n_jobs=n_jobs):
     # with parallel_backend('loky', n_jobs=n_jobs, inner_max_num_threads=1): # Use this line if you are using numpy or scipy functions that are not thread-safe
         results_nested = Parallel(verbose=0)(
-            delayed(process_batch)(batch) 
+            delayed(process_batch)(batch)
             # for batch in tqdm(time_batches, desc="Processing batches")
             for batch in time_batches
         )
-    
+
     # Flatten results and filter out None values
     results = [r for batch in results_nested for r in batch if r is not None]
-    
+
     if not results:
         raise RuntimeError("No valid results were produced")
-    
+
     # Unpack the results
     C_t, omega_values_list, filter_values_list, integrand_list = zip(*results)
-    
+
     return (np.array(C_t), omega_values_list, filter_values_list, integrand_list)

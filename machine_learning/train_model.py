@@ -1,36 +1,22 @@
 import os
 import sys
-import psutil
-import random
-from math import ceil, fsum
-import numpy as np
-import numba as nb
-import matplotlib.pyplot as plt
-import time
-import sys
-import pandas as pd
-# import h5py
-
-from scipy.signal import find_peaks
-from scipy.integrate import quad, simpson, trapezoid, IntegrationWarning
-
-from scipy.stats import cauchy
 
 import joblib
-from joblib import Parallel, delayed, parallel_backend
+import matplotlib.pyplot as plt
+import numba as nb
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+
+# import h5py
+from scipy.stats import cauchy
 
 # from tqdm import tqdm, trange
 # from tqdm.contrib import tenumerate
-
 from sklearn.model_selection import train_test_split
-
-from tensorflow.keras import layers, models, regularizers
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, BatchNormalization, Dropout
+from tensorflow.keras import layers, models
 from tensorflow.keras.optimizers import Adam
-import tensorflow as tf
 
-from itertools import product
 
 # Custom Exception Classes
 class ParallelExecutionError(Exception):
@@ -70,7 +56,7 @@ def noise_spectrum_1f(omega, A, alpha):
     '''
     return np.divide(A, np.power(omega, alpha))
 
-# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact 
+# I'm using the scipy.stats.cauchy.pdf function to compute the Lorentzian distribution., instead of using numba jit, because I didn't see much impact
 # on the performance of the function. The scipy function should be more stable and has better numerical precision, but I have also provided a numba implementation
 # that should do the same thing (but please check).
 def noise_spectrum_lor(omega, omega_0, gamma,A):
@@ -100,12 +86,12 @@ def noise_spectrum_lor(omega, omega_0, gamma,A):
 #     '''
 #     # Preallocate the result array
 #     result = np.empty_like(omega, dtype=np.float64)
-    
+
 #     # Compute Lorentzian (Cauchy) distribution manually
 #     for i in range(len(omega)):
 #         # Equivalent to scipy.stats.cauchy.pdf(x, loc=omega_0, scale=gamma)
 #         result[i] = A / (np.pi * gamma * (1 + ((omega[i] - omega_0) / gamma)**2))
-    
+
 #     return result
 
 @nb.njit(parallel=False)
@@ -146,7 +132,7 @@ def noise_spectrum_combination(omega,f_params,lor_params,white_params):
                     raise ValueError('All the parameters in the dictionary must have the same length.')
         else:
             first_length = 0
-        
+
         if my_dict == f_params:
             if first_length != 0:
                 f_values  = list(zip(my_dict["A"], my_dict["alpha"]))
@@ -204,7 +190,7 @@ def filter_function_approx(omega, N, T):
     '''
     if not isinstance(N, int):
         raise TypeError(f"N must be an integer, got {type(N).__name__}")
-    
+
     if N % 2 == 0:
         return 16 * (np.sin((omega*T) / 2) ** 2) * (np.sin((omega*T)/(4*N))**4) / (np.cos((omega*T)/(2*N))**2)
     else:
@@ -240,14 +226,14 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
         t_k = T/(2*N)*np.arange(1,2*N+1,2) # Pulses are evenly spaced. This is the middle of the each pulse. Alternatively, np.linspace((T/N)/2, T*(1-1/(2*N)), N)
         if (t_k<0).any():
             raise ValueError("One of the Pulse start times is negative. This is not allowed.")
-        
+
     if method == 'numba':
         # Uses numba to speed up the sum. Should be the fastest implementation.
         # Doesn't store the intermediate results, so it's memory efficient.
         sum_term = numba_complex_sum(t_k, omega)
     elif method == 'numpy_array':
-        # Uses numpy array broadcasting to vectorize the sum. 
-        # A little faster that a summation loop, and more numerically stable, but has a higher memory overhead. 
+        # Uses numpy array broadcasting to vectorize the sum.
+        # A little faster that a summation loop, and more numerically stable, but has a higher memory overhead.
         sum_array = np.exp(1j * omega[:, np.newaxis] * t_k)
         sum_array[:,::2] *= -1 # Adds negative sign to odd indices of t_k
         # sum_array.sort(axis=1)
@@ -261,19 +247,19 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
         # for k in range(0,N,2):
         #     # neg_sum_term = neg_sum_term - np.exp(1j * omega * t_k[k])
         #     neg_sum_term = np.sum(np.vstack((neg_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
-            
+
         # for k in range(1,N+1,2):
         #     # pos_sum_term = pos_sum_term + np.exp(1j * omega * t_k[k])
         #     pos_sum_term = np.sum(np.vstack((pos_sum_term,np.exp(1j * omega * t_k[k]))),axis=0)
 
         # sum_term = (pos_sum_term-neg_sum_term)
-            
+
         sum_term = np.zeros(omega.shape)
         for k in range(N):
             sum_term += ((-1)**(k+1)) * np.exp(1j * omega * t_k[k])
-    
+
     result = np.power(np.abs(1 + np.power(-1,N+1) * np.exp(1j * omega * T) + 2 * np.cos(omega * tau_p / 2) * sum_term),2)
-    
+
     return result
 
 # from tensorflow.python.client import device_lib
@@ -283,7 +269,7 @@ def filter_function_finite(omega, N, T, tau_p, method='numba'):
 def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size=3):
     # Input layer
     inputs = layers.Input(shape=input_shape)
-    
+
     # Encoder: 3 Conv1D + BatchNorm + MaxPooling + Dropout
     x = layers.Conv1D(filters=1000, kernel_size=kernel_size, padding='same')(inputs)
     # x = layers.Dropout(dropout_rate)(x)
@@ -291,14 +277,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)  # ReLU activation after BatchNorm
     x = layers.LeakyReLU(0.1)(x)
     x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
@@ -327,7 +313,7 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     # Decoder: 3 Conv1D + BatchNorm + UpSampling + Dropout
     x = layers.Conv1D(filters=4000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
@@ -335,14 +321,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
@@ -356,14 +342,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     # Dense layer to match output shape
     x = layers.Flatten()(x)
     outputs = layers.Dense(output_shape[-1], activation=activation_output)(x)
-    
+
     # Model definition
     model = models.Model(inputs, outputs)
-    
+
     return model
 
 def add_gaussian_noise(C_t, loc, sigma, copies):
@@ -389,13 +375,13 @@ def add_gaussian_noise(C_t, loc, sigma, copies):
         copies times with different noise added
     """
     n, k = C_t.shape
-    
+
     # Repeat each row copies times
     repeated = np.repeat(C_t, copies, axis=0)
-    
+
     # Generate noise for all copies
     noise = np.random.normal(loc, sigma, size=(n*copies, k))
-    
+
     return repeated + noise
 
 def str_to_bool(value):
@@ -455,7 +441,7 @@ else:
 
     # noise_types = [
     #     "noise_spectrum_1f",
-    #     "noise_spectrum_lor", 
+    #     "noise_spectrum_lor",
     #     "noise_spectrum_combo_N1f_1_Nlor_1_NC_1",
     #     "noise_spectrum_combo_N1f_1_Nlor_2_NC_1"
     # ]
@@ -493,9 +479,9 @@ for name in noise_types:
     with pd.HDFStore(f"{global_filepath}training_data_{name}_{params}_finite_width.h5", 'r') as store:
         data_X = np.array(store["data"].values)
         noise_profile_args = np.array(store["noise_profile_args"].values)
-    
+
     data_Y = np.empty((data_X.shape[0], len(om)))
-    
+
     # Generate the appropriate noise spectra
     if name == "noise_spectrum_1f":
         for i in range(data_X.shape[0]):
@@ -506,20 +492,20 @@ for name in noise_types:
     else:
         for i in range(data_X.shape[0]):
             data_Y[i,:] = noise_spectrum_combination(om, *noise_profile_args[i])
-    
+
     # Add Gaussian noise if specified
     if gaussian_noise:
         data_X = add_gaussian_noise(data_X, mu, sigma, copies)
         data_Y = np.repeat(data_Y, copies, axis=0)
-    
+
     # Split the current dataset
     data_X_train, data_X_val, data_Y_train, data_Y_val = train_test_split(
-        data_X, 
+        data_X,
         np.log1p(data_Y),
-        shuffle=True, 
+        shuffle=True,
         test_size=0.1
     )
-    
+
     # Concatenate with existing data
     if XTraining is None:
         XTraining = data_X_train
@@ -531,7 +517,7 @@ for name in noise_types:
         YTraining = np.concatenate((YTraining, data_Y_train), axis=0)
         XValidation = np.concatenate((XValidation, data_X_val), axis=0)
         YValidation = np.concatenate((YValidation, data_Y_val), axis=0)
-    
+
     # Free memory
     del data_X
     del data_Y
@@ -579,7 +565,7 @@ else:
         #     print(f"Memory: {gpu_memory}")
         # except Exception as e:
         #     print("Issue with memory retrieval:",e)
-        
+
 # Create a MirroredStrategy for data parallelism
 try:
   strategy = tf.distribute.MirroredStrategy()

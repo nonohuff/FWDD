@@ -1,47 +1,27 @@
 import json
 import os
-import psutil
-import time
-import warnings
+import pickle
 import sys
-from math import ceil, fsum
-import numpy as np
-import numba as nb
-import pandas as pd
+
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pickle 
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_squared_error
 
-from scipy import interpolate
-from scipy.signal import find_peaks
-from scipy.integrate import quad, simpson, trapezoid, IntegrationWarning
-from scipy.optimize import curve_fit, minimize, differential_evolution, brentq, NonlinearConstraint, least_squares
-from scipy.stats import cauchy, chi2
-from scipy.signal import butter, filtfilt
-from scipy.special import huber
-
-from sklearn.metrics import mean_squared_error, root_mean_squared_error
-from sklearn.utils import resample
-
-from skopt import gp_minimize
-from skopt.space import Real
-
-from tqdm.notebook import tqdm, trange
-from tqdm.contrib import tenumerate
-
-import joblib
-from joblib import Parallel, delayed, parallel_backend
-
-from itertools import product, combinations
-import multiprocessing
-
-from fwdd import filter_function as ff
-from fwdd import noise_spectra as ns
 from fwdd import coherence_profile as cp
-from fwdd.noise_learning_fitting import func_to_fit, fit_coherence_decay, fit_noise_spectrum, fit_coherence_decay_combined, create_parameter_constraints
-from fwdd.fitting_utils import find_widest_contiguous_stretch, find_time_range_for_C_t_bounds, add_gaussian_noise, format_parameters, create_combined_analysis_plot, calculate_total_combinations, bootstrap_multiple_samples, analyze_intervals
-
-
+from fwdd import noise_spectra as ns
+from fwdd.fitting_utils import (
+    add_gaussian_noise,
+    create_combined_analysis_plot,
+    find_time_range_for_C_t_bounds,
+    find_widest_contiguous_stretch,
+    format_parameters,
+)
+from fwdd.noise_learning_fitting import (
+    fit_coherence_decay,
+    fit_coherence_decay_combined,
+    func_to_fit,
+)
 
 experimental_data = sys.argv[12].lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly', 'uh-huh'] if len(sys.argv) > 12 else False # If True, loads experimental data from json file. If False, uses artificially simulated data.
 
@@ -146,7 +126,7 @@ finite_width_params = {
 
 # Extract counts
 N1f = finite_width_params["N1f"]
-Nlor = finite_width_params["Nlor"] 
+Nlor = finite_width_params["Nlor"]
 NC = finite_width_params["NC"]
 Ndpl = finite_width_params["Ndpl"]
 
@@ -159,14 +139,14 @@ if N1f > 0:
     alpha_1f = np.random.choice(np.linspace(0, 3, 1001), size=N1f)
     noise_params[0] = {"A": A_1f.tolist(), "alpha": alpha_1f.tolist()}
 
-# Generate Lorentzian noise parameters  
+# Generate Lorentzian noise parameters
 if Nlor > 0:
     omega_0_lor = np.random.choice(np.linspace(1e-3, 1e8, 10001), size=Nlor)  # Central frequency range
     gamma_lor = np.random.choice(np.linspace(1e-4, 1e6, 10001), size=Nlor)    # Half-width range
     A_lor = np.random.choice(np.linspace(0, 100, 1001), size=Nlor)            # Amplitude range
     noise_params[1] = {
-        "omega_0": omega_0_lor.tolist(), 
-        "gamma": gamma_lor.tolist(), 
+        "omega_0": omega_0_lor.tolist(),
+        "gamma": gamma_lor.tolist(),
         "A": A_lor.tolist()
     }
 
@@ -183,7 +163,7 @@ if Ndpl > 0:
     gamma_frac = np.random.choice(np.linspace(1e-4, 1e2, 1001), size=Ndpl)
     noise_params[3] = {
         "A": A_frac.tolist(),
-        "alpha": alpha_frac.tolist(), 
+        "alpha": alpha_frac.tolist(),
         "beta": beta_frac.tolist(),
         "gamma": gamma_frac.tolist()
     }
@@ -193,20 +173,20 @@ print("Generated noise_params:")
 for i, param_dict in enumerate(noise_params):
     param_names = ["f_params", "lor_params", "white_params", "double_power_law_params"]
     print(f"{param_names[i]}: {param_dict}")
-    
+
 # # You can also print individual parameter values like in your original code
 # if noise_params[0]:  # If 1/f params exist
 #     print(f"\n1/f noise - A values: {noise_params[0]['A']}")
 #     print(f"1/f noise - alpha values: {noise_params[0]['alpha']}")
-    
-# if noise_params[2]:  # If white noise params exist  
+
+# if noise_params[2]:  # If white noise params exist
 #     print(f"White noise - C values: {noise_params[2]['C']}")
-    
+
 # if noise_params[1]:  # If Lorentzian params exist
 #     print(f"Lorentzian noise - omega_0 values: {noise_params[1]['omega_0']}")
 #     print(f"Lorentzian noise - gamma values: {noise_params[1]['gamma']}")
 #     print(f"Lorentzian noise - A values: {noise_params[1]['A']}")
-    
+
 # if noise_params[3]:  # If double power law params exist
 #     print(f"Double power law - A values: {noise_params[3]['A']}")
 #     print(f"Double power law - alpha values: {noise_params[3]['alpha']}")
@@ -227,10 +207,10 @@ fixed_kwargs_dict = {}
 ############################################################################
 
 # # Bootstrap the noise parameters
-# C_t_sigmas = {1: 0.06138902539286488, 
-#  8: 0.03925182944743504, 
-#  128: 0.10197957240006385, 
-#  256: 0.07537532562991836, 
+# C_t_sigmas = {1: 0.06138902539286488,
+#  8: 0.03925182944743504,
+#  128: 0.10197957240006385,
+#  256: 0.07537532562991836,
 #  512: 0.16274530391838227}
 
 # ############################################################################################
@@ -312,7 +292,7 @@ fixed_kwargs_dict = {}
 
 # # Extract counts
 # N1f = finite_width_params["N1f"]
-# Nlor = finite_width_params["Nlor"] 
+# Nlor = finite_width_params["Nlor"]
 # NC = finite_width_params["NC"]
 # Ncom_frac = finite_width_params["Ncf"]
 
@@ -331,20 +311,20 @@ fixed_kwargs_dict = {}
 # for i, param_dict in enumerate(noise_params):
 #     param_names = ["f_params", "lor_params", "white_params", "combined_frac_params"]
 #     print(f"{param_names[i]}: {param_dict}")
-    
+
 # # # You can also print individual parameter values like in your original code
 # # if noise_params[0]:  # If 1/f params exist
 # #     print(f"\n1/f noise - A values: {noise_params[0]['A']}")
 # #     print(f"1/f noise - alpha values: {noise_params[0]['alpha']}")
-    
-# # if noise_params[2]:  # If white noise params exist  
+
+# # if noise_params[2]:  # If white noise params exist
 # #     print(f"White noise - C values: {noise_params[2]['C']}")
-    
+
 # # if noise_params[1]:  # If Lorentzian params exist
 # #     print(f"Lorentzian noise - omega_0 values: {noise_params[1]['omega_0']}")
 # #     print(f"Lorentzian noise - gamma values: {noise_params[1]['gamma']}")
 # #     print(f"Lorentzian noise - A values: {noise_params[1]['A']}")
-    
+
 # # if noise_params[3]:  # If combined fraction params exist
 # #     print(f"Combined fraction - A values: {noise_params[3]['A']}")
 # #     print(f"Combined fraction - alpha values: {noise_params[3]['alpha']}")
@@ -461,14 +441,14 @@ for n in n_values:
             t_points = np.logspace(np.log10(finite_width_params["N"]*finite_width_params["tau_p"]+1e-10), np.log10(300), time_resolution)
 
     results_dict[n]["t_points"] = t_points
-    
+
     # Update omega range
     w_min = n*np.pi/(np.max(t_points))
     w_max = n*np.pi/(np.min(t_points))
-    finite_width_params["omega_range"] = (10**np.floor(np.log10(w_min)), 
+    finite_width_params["omega_range"] = (10**np.floor(np.log10(w_min)),
                                         np.max([10**(np.ceil(np.log10(w_max))),
                                                 10**(np.floor(np.log10(w_min))+4)]))
-    
+
     # Generate C_t_observed
     if experimental_data:
         results_dict[n]["C(t)_true"] = C_t_observed
@@ -478,7 +458,7 @@ for n in n_values:
             results_dict[n]["C(t)_dirt"] = C_t_dirty
     else:
         C_t_observed = func_to_fit(t_points, ns.noise_spectrum_combination, *noise_params, delta=delta_approx, **finite_width_params)
-        C_t_observed = F * C_t_observed 
+        C_t_observed = F * C_t_observed
 
         results_dict[n]["C(t)_true"] = C_t_observed
         print(f"N={n}: C(t) Range:", (np.max(C_t_observed), np.min(C_t_observed)))
@@ -501,28 +481,28 @@ if combined_loss:
     bounds = finite_width_params["N1f"]*[(0,10**4),(0,10)] + finite_width_params["Nlor"]*[(0,10**4),(0, 0),(0,10**4)] + finite_width_params["NC"]*[(0,10)]+ finite_width_params["NC"]*[(0,10)] + finite_width_params["Ndpl"]*[(0,10**6),(0,10),(0, 10),(1e-10, 10**4)]
     print("\n=== COMBINED LOSS OPTIMIZATION ===")
     print("Fitting parameters to minimize combined loss across all n values...")
-    
+
     # if local optimization, use multiple random initial guesses to avoid local minima
     if meth == "L-BFGS-B":
         r = 10 if not delta_approx else 50
     else:
-        r = 1 
+        r = 1
 
     best_combined_loss = np.inf
     best_combined_result = None
     all_combined_results = []  # Store all results for error analysis
-    
+
     for k in range(r):
         if k == 0:
             # Use fixed initial guess for first run, so that you can customize if you want a specific starting point
-            initial_args = [{'A': [10]*finite_width_params["N1f"], 'alpha': [1]*finite_width_params["N1f"]}, 
-                           {"A": [1]*finite_width_params["Nlor"], 
-                            "omega_0": [0]*finite_width_params["Nlor"], 
-                            "gamma": [1]*finite_width_params["Nlor"]}, 
+            initial_args = [{'A': [10]*finite_width_params["N1f"], 'alpha': [1]*finite_width_params["N1f"]},
+                           {"A": [1]*finite_width_params["Nlor"],
+                            "omega_0": [0]*finite_width_params["Nlor"],
+                            "gamma": [1]*finite_width_params["Nlor"]},
                            {'C': [0]*finite_width_params["NC"]},
-                           {'A': [1]*finite_width_params["Ndpl"], 
-                            'alpha': [1]*finite_width_params["Ndpl"], 
-                            'beta': [2]*finite_width_params["Ndpl"], 
+                           {'A': [1]*finite_width_params["Ndpl"],
+                            'alpha': [1]*finite_width_params["Ndpl"],
+                            'beta': [2]*finite_width_params["Ndpl"],
                             'gamma': [1]*finite_width_params["Ndpl"]}]
         else:
             # Generate alpha first
@@ -544,8 +524,8 @@ if combined_loss:
         # Run combined optimization
         # We have pre-selected values for population and iterations based on trial and error to balance speed and accuracy. You can adjust these if you want.
         optimized_args, optimized_errors, opt_result = fit_coherence_decay_combined(
-            C_t_observed_dict, times_dict, ns.noise_spectrum_combination, initial_args, 
-            fixed_kwargs_dict, n_values, bounds, method=meth, delta=delta_approx, 
+            C_t_observed_dict, times_dict, ns.noise_spectrum_combination, initial_args,
+            fixed_kwargs_dict, n_values, bounds, method=meth, delta=delta_approx,
             loss_type=loss_type, noise_level=noise_lvl, population=int(sys.argv[10]) if len(sys.argv) > 10 else 10, iterations=int(sys.argv[9]) if len(sys.argv) > 9 else 50
         )
 
@@ -557,27 +537,27 @@ if combined_loss:
             best_combined_result = (optimized_args, optimized_errors, opt_result)
             print(f"New best combined loss: {best_combined_loss} at iteration {k+1}")
             print(f"Combined optimized parameters: {optimized_args}")
-    
+
     # Calculate parameter statistics if r > 1
     if r > 1:
         print("\n=== PARAMETER STATISTICS FROM MULTIPLE RUNS ===")
-        
+
         # Extract parameter values from all runs
         param_values = {'A': [], 'alpha': [], 'C': []}
-        
+
         for optimized_args, _, _ in all_combined_results:
             # Extract A values
             if optimized_args[0].get('A'):
                 param_values['A'].extend(optimized_args[0]['A'])
-            
+
             # Extract alpha values
             if optimized_args[0].get('alpha'):
                 param_values['alpha'].extend(optimized_args[0]['alpha'])
-            
+
             # Extract C values
             if len(optimized_args) > 2 and optimized_args[2].get('C'):
                 param_values['C'].extend(optimized_args[2]['C'])
-        
+
         # Calculate statistics
         param_stats = {}
         for param_name, values in param_values.items():
@@ -593,12 +573,12 @@ if combined_loss:
                 print(f"{param_name}: mean={param_stats[param_name]['mean']:.4f} ± {param_stats[param_name]['std']:.4f}")
                 print(f"  Range: [{param_stats[param_name]['min']:.4f}, {param_stats[param_name]['max']:.4f}]")
                 print(f"  Median: {param_stats[param_name]['median']:.4f}")
-        
+
         # Store parameter statistics
         combined_param_stats = param_stats
     else:
         combined_param_stats = None
-    
+
     # Store the best result for all n values
     for n in n_values:
         results_dict[n]["optimized_args"] = best_combined_result[0]
@@ -606,19 +586,19 @@ if combined_loss:
         results_dict[n]["opt_result"] = best_combined_result[2]
         results_dict[n]["all_optimization_results"] = all_combined_results
         results_dict[n]["parameter_statistics"] = combined_param_stats
-    
+
     print(f"\nFinal combined loss: {best_combined_loss}")
     print(f"Final combined parameters: {best_combined_result[0]}")
 
 else:
     print("\n=== INDIVIDUAL OPTIMIZATION ===")
     print("Fitting parameters separately for each n value...")
-    
+
     # Original individual fitting logic
     for n in n_values:
 
         # *********** NOTE: BOUNDS MAY NEED TO BE ADJUSTED BASED ON n ***********
-        # Define bounds. Empirically chosen based on n. The smaller the bounds, the faster the optimization due to smaller search space. 
+        # Define bounds. Empirically chosen based on n. The smaller the bounds, the faster the optimization due to smaller search space.
         # These can be adjusted based on expected parameter ranges.
         if n >= 128:
             alpha_max = 10
@@ -631,11 +611,11 @@ else:
 
         print(f"\nOptimizing for N={n}...")
         MSE = np.inf
-        
+
         finite_width_params = fixed_kwargs_dict[n]
         t_points = times_dict[n]
         C_t_observed = C_t_observed_dict[n]
-        
+
         # if local optimization, use multiple random initial guesses to avoid local minima
         if meth == "L-BFGS-B":
             r = 10 if not delta_approx else 10**4
@@ -643,18 +623,18 @@ else:
             r = 1
 
         all_individual_results = []  # Store all results for error analysis
-        
+
         for k in range(r):
             if k == 0:
                 # Use fixed initial guess for first run, so that you can customize if you want a specific starting point
-                initial_args = [{'A': [10]*finite_width_params["N1f"], 'alpha': [1]*finite_width_params["N1f"]}, 
-                            {"A": [0]*finite_width_params["Nlor"], 
-                                "omega_0": [0]*finite_width_params["Nlor"], 
-                                "gamma": [0]*finite_width_params["Nlor"]}, 
+                initial_args = [{'A': [10]*finite_width_params["N1f"], 'alpha': [1]*finite_width_params["N1f"]},
+                            {"A": [0]*finite_width_params["Nlor"],
+                                "omega_0": [0]*finite_width_params["Nlor"],
+                                "gamma": [0]*finite_width_params["Nlor"]},
                             {'C': [0]*finite_width_params["NC"]},
-                            {'A': [0]*finite_width_params["Ndpl"], 
-                                'alpha': [1]*finite_width_params["Ndpl"], 
-                                'beta': [2]*finite_width_params["Ndpl"], 
+                            {'A': [0]*finite_width_params["Ndpl"],
+                                'alpha': [1]*finite_width_params["Ndpl"],
+                                'beta': [2]*finite_width_params["Ndpl"],
                                 'gamma': [1]*finite_width_params["Ndpl"]}]
             else:
                 # Generate alpha first
@@ -676,8 +656,8 @@ else:
             # Run individual optimization
             # We have pre-selected values for population and iterations based on trial and error to balance speed and accuracy. You can adjust these if you want.
             optimized_args, optimized_errors, opt_result = fit_coherence_decay(
-                C_t_observed, t_points, ns.noise_spectrum_combination, initial_args, 
-                finite_width_params, bounds, method=meth, delta=delta_approx, 
+                C_t_observed, t_points, ns.noise_spectrum_combination, initial_args,
+                finite_width_params, bounds, method=meth, delta=delta_approx,
                 loss_type=loss_type, noise_level=noise_lvl, population=int(sys.argv[10]) if len(sys.argv) > 10 else 10, iterations=int(sys.argv[9]) if len(sys.argv) > 9 else 50
             )
 
@@ -690,27 +670,27 @@ else:
                 results_dict[n]["optimized_args"] = optimized_args
                 results_dict[n]["optimized_errors"] = optimized_errors
                 results_dict[n]["opt_result"] = opt_result
-        
+
         # Calculate parameter statistics if r > 1
         if r > 1:
             print(f"\n=== PARAMETER STATISTICS FOR N={n} FROM MULTIPLE RUNS ===")
-            
+
             # Extract parameter values from all runs
             param_values = {'A': [], 'alpha': [], 'C': []}
-            
+
             for optimized_args, _, _ in all_individual_results:
                 # Extract A values
                 if optimized_args[0].get('A'):
                     param_values['A'].extend(optimized_args[0]['A'])
-                
+
                 # Extract alpha values
                 if optimized_args[0].get('alpha'):
                     param_values['alpha'].extend(optimized_args[0]['alpha'])
-                
+
                 # Extract C values
                 if len(optimized_args) > 2 and optimized_args[2].get('C'):
                     param_values['C'].extend(optimized_args[2]['C'])
-            
+
             # Calculate statistics
             param_stats = {}
             for param_name, values in param_values.items():
@@ -726,12 +706,12 @@ else:
                     print(f"{param_name}: mean={param_stats[param_name]['mean']:.4f} ± {param_stats[param_name]['std']:.4f}")
                     print(f"  Range: [{param_stats[param_name]['min']:.4f}, {param_stats[param_name]['max']:.4f}]")
                     print(f"  Median: {param_stats[param_name]['median']:.4f}")
-            
+
             # Store parameter statistics
             results_dict[n]["parameter_statistics"] = param_stats
         else:
             results_dict[n]["parameter_statistics"] = None
-        
+
         # Store all optimization results
         results_dict[n]["all_optimization_results"] = all_individual_results
 
@@ -740,14 +720,14 @@ else:
 # Continue with plotting and saving logic for each n value
 for n in n_values:
     print(f"\nProcessing plots for N={n}...")
-    
+
     finite_width_params = fixed_kwargs_dict[n]
     t_points = times_dict[n]
     C_t_observed = C_t_observed_dict[n]
 
     # Generate the plotting data
     green_line = cp.noise_inversion_delta(t_points, C_t_observed)
-    
+
     omega_values = n*np.pi/t_points
     omega_values = omega_values[(green_line != np.inf) & (green_line != -np.inf)]
     time_points = t_points[(green_line != np.inf) & (green_line != -np.inf)]
@@ -755,7 +735,7 @@ for n in n_values:
 
     fitted_noise_spectrum = ns.noise_spectrum_combination(omega_values, *results_dict[n]["optimized_args"])
     S_w_synthetic = ns.noise_spectrum_combination(omega_values, *noise_params)
-    
+
     C_t_plot = F*func_to_fit(t_points, ns.noise_spectrum_combination, *noise_params, delta=delta_approx, **finite_width_params)
 
     # PLOT 1: Noise Spectrum Comparison
@@ -798,10 +778,10 @@ for n in n_values:
             title = f"Delta approx S(ω), n = {n}"
         else:
             title = f"S(ω), n = {n}"
-    
+
     if combined_loss:
         title += " [Combined Loss]"
-    
+
     plt.title(title)
     try:
         plt.savefig(save_dir + title + ".png", dpi="figure", bbox_inches="tight")
@@ -815,24 +795,24 @@ for n in n_values:
     # PLOT 2: Coherence Decay Comparison
     plt.figure(figsize=(10, 6))
     if noise:
-        plt.plot(t_points, results_dict[n]["C(t)_dirt"], label=f"Noisy C(t)", marker='o')
-        plt.plot(t_points, results_dict[n]["C(t)_true"], label=f"Original C(t)", linestyle='--')
+        plt.plot(t_points, results_dict[n]["C(t)_dirt"], label="Noisy C(t)", marker='o')
+        plt.plot(t_points, results_dict[n]["C(t)_true"], label="Original C(t)", linestyle='--')
     else:
         try:
             if not experimental_data:
-                plt.plot(t_points, C_t_plot, label=f"Original C(t)")
+                plt.plot(t_points, C_t_plot, label="Original C(t)")
             fitted_C_t = func_to_fit(t_points, ns.noise_spectrum_combination, *results_dict[n]["optimized_args"], delta=delta_approx, **finite_width_params)
-        except Exception as e:
+        except Exception:
             if not experimental_data:
-                plt.plot(time_points, C_t_plot, label=f"Original C(t)")
+                plt.plot(time_points, C_t_plot, label="Original C(t)")
             fitted_C_t = func_to_fit(time_points, ns.noise_spectrum_combination, *results_dict[n]["optimized_args"], delta=delta_approx, **finite_width_params)
-    
+
     results_dict[n]["C(t)_fitted"] = fitted_C_t
     plt.plot(t_points, fitted_C_t, label=f"Fitted C(t) ({format_parameters(results_dict[n]['optimized_args'])})", linestyle='--')
 
     if delta_approx:
         plt.axvline(finite_width_params["N"]*finite_width_params["tau_p"], color='red', linestyle='-', linewidth=2, label=f't = N*τ_p = {finite_width_params["N"]*finite_width_params["tau_p"]:.3f} µs')
-    
+
     plt.xscale('log')
     plt.xlabel('Time (µs)')
     plt.ylabel('C(t)')
@@ -848,10 +828,10 @@ for n in n_values:
             title = f"Delta approx C(t), n = {n}"
         else:
             title = f"C(t), n = {n}"
-    
+
     if combined_loss:
         title += " [Combined Loss]"
-    
+
     plt.title(title)
     try:
         plt.savefig(save_dir + title + ".png", dpi="figure", bbox_inches="tight")
@@ -872,25 +852,25 @@ for n in n_values:
 
         try:
             if len(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)]) > 0:
-                plt.plot(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)], chi_t[(chi_t != np.inf) & (chi_t >= 10**-2)], label=f"Original χ(t)")
-        except Exception as e:
-            plt.plot(time_points[(chi_t != np.inf) & (chi_t >= 10**-2)], chi_t[(chi_t != np.inf) & (chi_t >= 10**-2)], label=f"Original χ(t)")
+                plt.plot(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)], chi_t[(chi_t != np.inf) & (chi_t >= 10**-2)], label="Original χ(t)")
+        except Exception:
+            plt.plot(time_points[(chi_t != np.inf) & (chi_t >= 10**-2)], chi_t[(chi_t != np.inf) & (chi_t >= 10**-2)], label="Original χ(t)")
 
         plt.axhline(y=chi_max, color='red', linestyle='--', label=f'{chi_max:.3f} > χ(t) > {chi_min:.3f}')
         plt.axhline(y=chi_min, color='red', linestyle='--')
-        
+
         try:
             guideline_t = t_points[(chi_t != np.inf) & (chi_t >= 10**-2)]
             # guideline_t_alpha = guideline_t**(results_dict[n]['optimized_args'][0]['alpha'][0]+1)
             # plt.plot(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)], guideline_t_alpha*(np.mean(chi_t)/np.mean(guideline_t_alpha)), label=r"$t^{\alpha+1}$ Guideline")
             if len(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)]) > 0:
                 plt.plot(t_points[(chi_t != np.inf) & (chi_t >= 10**-2)], guideline_t*(np.mean(chi_t)/np.mean(guideline_t)), label=r"$t$ Guideline")
-        except Exception as e:
+        except Exception:
             guideline_t = time_points[(chi_t != np.inf) & (chi_t >= 10**-2)]
             # guideline_t_alpha = guideline_t**(results_dict[n]['optimized_args'][0]['alpha'][0]+1)
             # plt.plot(time_points[(chi_t != np.inf) & (chi_t >= 10**-2)], guideline_t_alpha*(np.mean(chi_t)/np.mean(guideline_t_alpha)), label=r"$t^{\alpha+1}$ Guideline")
             plt.plot(time_points[(chi_t != np.inf) & (chi_t >= 10**-2)], guideline_t*(np.mean(chi_t)/np.mean(guideline_t)), label=r"$t$ Guideline")
-        
+
         plt.xscale('log')
         plt.yscale('log')
         plt.xlabel("Time (µs)")
@@ -930,7 +910,7 @@ for n in n_values:
             np.save(save_dir + f"dirty_C_t_n{n}.npy", results_dict[n]["C(t)_dirt"])
 
 # Save results
-with open(save_dir + f"results.pkl", 'wb') as f:
+with open(save_dir + "results.pkl", 'wb') as f:
     pickle.dump(results_dict, f)
 
 print(f"\nResults saved to: {save_dir}")

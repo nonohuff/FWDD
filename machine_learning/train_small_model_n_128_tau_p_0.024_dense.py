@@ -1,18 +1,13 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
+import sys
 
 import joblib
-
-from sklearn.model_selection import train_test_split
-
-from tensorflow.keras import layers, models, regularizers
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, BatchNormalization, Dropout
-from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
-
-import sys
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import layers
+from tensorflow.keras.optimizers import Adam
 
 sys.setrecursionlimit(5000)
 
@@ -59,14 +54,14 @@ def build_dense(input_shape, output_shape, k_layers=6, r_units=100, negative_slo
     """
     # Clear any existing models/layers from memory
     tf.keras.backend.clear_session()
-    
+
     # Initialize the model with Sequential API
     model = tf.keras.Sequential([
         # Input layer
         layers.Input(shape=input_shape),
         layers.Flatten()
     ])
-    
+
     # Add k hidden layers, each with r units
     for _ in range(k_layers):
         model.add(layers.Dense(r_units))
@@ -74,17 +69,17 @@ def build_dense(input_shape, output_shape, k_layers=6, r_units=100, negative_slo
         # Uncomment below lines if you want to add regularization
         # model.add(layers.BatchNormalization())
         # model.add(layers.Dropout(0.3))
-    
+
     # Output layer
     model.add(layers.Dense(output_shape[-1], activation=activation_output))
-    
-    
+
+
     return model
 
 # def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size=3):
 #     # Input layer
 #     inputs = layers.Input(shape=input_shape)
-    
+
 #     # Encoder: 3 Conv1D + BatchNorm + MaxPooling + Dropout
 #     x = layers.Conv1D(filters=1000, kernel_size=kernel_size, padding='same')(inputs)
 #     # x = layers.Dropout(dropout_rate)(x)
@@ -92,21 +87,21 @@ def build_dense(input_shape, output_shape, k_layers=6, r_units=100, negative_slo
 #     # x = layers.ReLU()(x)  # ReLU activation after BatchNorm
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
 #     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
 #     # x = layers.Dropout(dropout_rate)(x)
 #     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
 #     # x = layers.ReLU()(x)
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
 #     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
 #     # x = layers.Dropout(dropout_rate)(x)
 #     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
 #     # x = layers.ReLU()(x)
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
 #     # Decoder: 3 Conv1D + BatchNorm + UpSampling + Dropout
 #     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
 #     # x = layers.Dropout(dropout_rate)(x)
@@ -114,35 +109,35 @@ def build_dense(input_shape, output_shape, k_layers=6, r_units=100, negative_slo
 #     # x = layers.ReLU()(x)
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.UpSampling1D(size=2)(x)
-    
+
 #     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
 #     # x = layers.Dropout(dropout_rate)(x)
 #     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
 #     # x = layers.ReLU()(x)
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.UpSampling1D(size=2)(x)
-    
+
 #     x = layers.Conv1D(filters=1000, kernel_size=kernel_size, padding='same')(x)
 #     # x = layers.Dropout(dropout_rate)(x)
 #     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
 #     # x = layers.ReLU()(x)
 #     x = layers.LeakyReLU(negative_slope=0.1)(x)
 #     # x = layers.UpSampling1D(size=2)(x)
-    
+
 #     # Dense layer to match output shape
 #     x = layers.Flatten()(x)
 #     outputs = layers.Dense(output_shape[-1], activation=activation_output)(x)
-    
+
 #     # Model definition
 #     model = models.Model(inputs, outputs)
-    
+
 #     return model
 
 def add_gaussian_noise(C_t, loc, sigma):
     """ """
 
     noise = np.random.normal(loc, sigma, size=len(C_t))
-    
+
     return C_t + noise
 
 # Array slicing to reduce model size by a factor of "reduce"
@@ -182,7 +177,7 @@ else:
 
     noise_types = [
         "noise_spectrum_1f",
-        "noise_spectrum_lor", 
+        "noise_spectrum_lor",
         "noise_spectrum_combo_N1f_1_Nlor_1_NC_1",
         "noise_spectrum_combo_N1f_1_Nlor_2_NC_1"
     ]
@@ -249,7 +244,7 @@ else:
             print(f"Memory: {gpu_memory}")
         except Exception as e:
             print("Issue with memory retrieval:",e)
-        
+
 
 # Summary of GPUs detected
 print(f"\nTotal GPUs detected: {len(gpus)}")

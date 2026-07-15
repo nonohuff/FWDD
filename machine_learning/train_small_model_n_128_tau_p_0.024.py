@@ -1,16 +1,13 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 
 import joblib
-
-from sklearn.model_selection import train_test_split
-
-from tensorflow.keras import layers, models, regularizers
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, BatchNormalization, Dropout
-from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import layers, models
+from tensorflow.keras.optimizers import Adam
+
 
 # Custom Exception Classes
 class ParallelExecutionError(Exception):
@@ -37,7 +34,7 @@ else:
 def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size=10):
     # Input layer
     inputs = layers.Input(shape=input_shape)
-    
+
     # Encoder: 3 Conv1D + BatchNorm + MaxPooling + Dropout
     x = layers.Conv1D(filters=1000, kernel_size=kernel_size, padding='same')(inputs)
     # x = layers.Dropout(dropout_rate)(x)
@@ -45,14 +42,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)  # ReLU activation after BatchNorm
     x = layers.LeakyReLU(0.1)(x)
     x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.MaxPooling1D(pool_size=2)(x)
-    
+
     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
@@ -81,7 +78,7 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     # Decoder: 3 Conv1D + BatchNorm + UpSampling + Dropout
     x = layers.Conv1D(filters=4000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
@@ -89,14 +86,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     x = layers.Conv1D(filters=3000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     x = layers.Conv1D(filters=2000, kernel_size=kernel_size, padding='same')(x)
     # x = layers.Dropout(dropout_rate)(x)
     # x = layers.BatchNormalization()(x)  # BatchNorm after Conv
@@ -110,14 +107,14 @@ def build_cnn(input_shape, output_shape, activation_output='linear', kernel_size
     # x = layers.ReLU()(x)
     x = layers.LeakyReLU(0.1)(x)
     x = layers.UpSampling1D(size=2)(x)
-    
+
     # Dense layer to match output shape
     x = layers.Flatten()(x)
     outputs = layers.Dense(output_shape[-1], activation=activation_output)(x)
-    
+
     # Model definition
     model = models.Model(inputs, outputs)
-    
+
     return model
 
 def add_gaussian_noise(C_t, loc, sigma, copies):
@@ -143,13 +140,13 @@ def add_gaussian_noise(C_t, loc, sigma, copies):
         copies times with different noise added
     """
     n, k = C_t.shape
-    
+
     # Repeat each row copies times
     repeated = np.repeat(C_t, copies, axis=0)
-    
+
     # Generate noise for all copies
     noise = np.random.normal(loc, sigma, size=(n*copies, k))
-    
+
     return repeated + noise
 
 # Array slicing to reduce model size by a factor of "reduce"
@@ -187,7 +184,7 @@ else:
 
     noise_types = [
         "noise_spectrum_1f",
-        "noise_spectrum_lor", 
+        "noise_spectrum_lor",
         "noise_spectrum_combo_N1f_1_Nlor_1_NC_1",
         "noise_spectrum_combo_N1f_1_Nlor_2_NC_1"
     ]
@@ -255,7 +252,7 @@ else:
             print(f"Memory: {gpu_memory}")
         except Exception as e:
             print("Issue with memory retrieval:",e)
-        
+
 
 # Summary of GPUs detected
 print(f"\nTotal GPUs detected: {len(gpus)}")

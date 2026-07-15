@@ -1,8 +1,9 @@
-import os
-import sys
 import glob
+import os
+
 import joblib
 import numpy as np
+
 
 def combine_task_files(global_filepath, base_filename, task_filename_pattern):
     """
@@ -46,7 +47,7 @@ def combine_task_files(global_filepath, base_filename, task_filename_pattern):
             global_X.extend(task_data["data"][0])
             global_Y.extend(task_data["data"][1])
             global_params.extend(task_data["noise_profile_args"])
-    
+
         # Save the merged data back to the global file
         merged_data = {
             "noise_profile": global_data.get("noise_profile") if global_X else task_data["noise_profile"],
