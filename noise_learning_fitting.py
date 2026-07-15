@@ -35,11 +35,11 @@ from joblib import Parallel, delayed, parallel_backend
 from itertools import product, combinations
 import multiprocessing
 
-from package import filter_function as ff
-from package import noise_spectra as ns
-from package import coherence_profile as cp
-from package.noise_learning_fitting import func_to_fit, fit_coherence_decay, fit_noise_spectrum, fit_coherence_decay_combined, create_parameter_constraints
-from package.fitting_utils import find_widest_contiguous_stretch, find_time_range_for_C_t_bounds, add_gaussian_noise, format_parameters, create_combined_analysis_plot, calculate_total_combinations, bootstrap_multiple_samples, analyze_intervals
+from fwdd import filter_function as ff
+from fwdd import noise_spectra as ns
+from fwdd import coherence_profile as cp
+from fwdd.noise_learning_fitting import func_to_fit, fit_coherence_decay, fit_noise_spectrum, fit_coherence_decay_combined, create_parameter_constraints
+from fwdd.fitting_utils import find_widest_contiguous_stretch, find_time_range_for_C_t_bounds, add_gaussian_noise, format_parameters, create_combined_analysis_plot, calculate_total_combinations, bootstrap_multiple_samples, analyze_intervals
 
 
 

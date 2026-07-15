@@ -3,6 +3,38 @@ FWDD (Finite Width Dynamical Decoupling) implements Dynamical Decoupling conside
 
 The code presented here is used in the paper [Quantum sensing with a spin ensemble in a two-dimensional material](http://arxiv.org/abs/2509.08984) to predict noise spectra.
 
+# Installation
+
+You can install `fwdd` via `pip` or `conda` (from Conda-forge).
+
+## Via pip
+```bash
+pip install fwdd
+```
+
+## Via conda (Conda-forge)
+```bash
+conda install -c conda-forge fwdd
+```
+
+## Local Development & Tutorials
+If you are running the tutorial notebooks locally and want to make live changes, run an editable installation:
+```bash
+git clone https://github.com/nonohuff/FWDD.git
+cd FWDD
+pip install -e .
+```
+
+# Quick Start
+Here is how you can import the core modules of `fwdd` in your python code:
+```python
+from fwdd import filter_function as ff
+from fwdd import noise_spectra as ns
+from fwdd import coherence_profile as cp
+from fwdd import noise_learning_fitting as nlf
+from fwdd import fitting_utils as fu
+```
+
 # Coherence-Noise Relationship
 
 A given dynamical decoupling pulse sequence of $N$ pulses (e.g. CPMG, XY8) yields a corresponding filter function, $F_N(\omega, t)$, which is related to the coherence decay as follows:
