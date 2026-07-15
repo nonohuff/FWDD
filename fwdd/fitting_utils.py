@@ -2,7 +2,7 @@ import os
 
 # Bootstrapping functionality
 import random
-from typing import Dict, List, Set, Tuple, Any, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np

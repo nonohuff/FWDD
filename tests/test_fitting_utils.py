@@ -1,19 +1,21 @@
-import numpy as np
-import pytest
 import os
 import tempfile
+
+import numpy as np
+
 from fwdd.fitting_utils import (
-    find_C_t_crossing_points,
-    find_time_range_for_C_t_bounds,
     analyze_intervals,
-    find_widest_contiguous_stretch,
-    format_parameters,
-    get_bootstrap_sample,
     bootstrap_multiple_samples,
     calculate_total_combinations,
     create_combined_analysis_plot,
+    find_C_t_crossing_points,
+    find_time_range_for_C_t_bounds,
+    find_widest_contiguous_stretch,
+    format_parameters,
+    get_bootstrap_sample,
 )
 from fwdd.noise_spectra import noise_spectrum_combination
+
 
 def test_find_widest_contiguous_stretch():
     arr = np.array([0.1, 0.5, 0.6, 0.2, 0.9, 0.1, 0.5])
@@ -38,7 +40,7 @@ def test_find_C_t_crossing_points_and_bounds():
     # Simple check on crossing point finding using delta approx
     finite_width_params = {"N": 8, "tau_p": 0.024, "integration_method": "trapezoid"}
     noise_params = ({"A": [1.0], "alpha": [1.0]}, {}, {}, {}) # f_params with A=1.0, alpha=1.0
-    
+
     crossings = find_C_t_crossing_points(
         C_t_max=0.9,
         C_t_min=0.2,
@@ -85,15 +87,15 @@ def test_bootstrapping():
             "run0": {"A": 2.0, "alpha": 1.0}
         }
     }
-    
+
     total = calculate_total_combinations(data)
     assert total == 2 # 2 runs for 8, 1 run for 128 -> 2 * 1 = 2
-    
+
     sample = get_bootstrap_sample(data)
     assert 8 in sample
     assert 128 in sample
     assert len(sample[8]) == 2
-    
+
     samples = bootstrap_multiple_samples(data, num_bootstrap=5)
     # Since total combinations is 2, it should generate max 2 unique samples and break
     assert len(samples) <= 2
@@ -109,7 +111,7 @@ def test_create_combined_analysis_plot():
             "C(t)_true": np.array([0.9, 0.7])
         }
     }
-    
+
     # We save plot to a temporary directory
     with tempfile.TemporaryDirectory() as tmp_dir:
         create_combined_analysis_plot(

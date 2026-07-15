@@ -1,19 +1,19 @@
 import numpy as np
-import pytest
 from scipy.optimize import NonlinearConstraint
+
 from fwdd.noise_learning_fitting import (
-    huber_loss,
-    reconstruct_args,
-    create_coherence_parameter_constraints,
-    loss_function,
-    combined_loss_function,
     _global_loss_function,
-    create_parameter_constraints,
+    combined_loss_function,
+    create_coherence_parameter_constraints,
     fit_coherence_decay,
     fit_coherence_decay_combined,
     fit_noise_spectrum,
+    huber_loss,
+    loss_function,
+    reconstruct_args,
 )
 from fwdd.noise_spectra import noise_spectrum_combination
+
 
 def test_huber_loss():
     residuals = np.array([0.1, 0.2, -0.05])
@@ -42,7 +42,7 @@ def test_loss_function():
     times = np.array([1.0, 2.0])
     param_structure = [{"A": 1, "alpha": 1}, {}, {}, {}]
     fixed_kwargs = {"N": 8, "tau_p": 0.024, "integration_method": "trapezoid"}
-    
+
     loss = loss_function(
         params,
         C_t_observed,
@@ -61,7 +61,7 @@ def test_combined_loss_function():
     times_dict = {8: np.array([1.0, 2.0])}
     param_structure = [{"A": 1, "alpha": 1}, {}, {}, {}]
     fixed_kwargs_dict = {8: {"N": 8, "tau_p": 0.024, "integration_method": "trapezoid"}}
-    
+
     loss = combined_loss_function(
         params,
         C_t_observed_dict,
@@ -80,7 +80,7 @@ def test_fit_coherence_decay():
     initial_args = [{"A": [1.0], "alpha": [1.0]}, {}, {}, {}]
     fixed_kwargs = {"N": 8, "tau_p": 0.024, "integration_method": "trapezoid"}
     bounds = [(0.1, 10.0), (0.1, 5.0)]
-    
+
     opt_args, errors, result = fit_coherence_decay(
         C_t_observed,
         times,
@@ -101,7 +101,7 @@ def test_fit_coherence_decay_combined():
     initial_args = [{"A": [1.0], "alpha": [1.0]}, {}, {}, {}]
     fixed_kwargs_dict = {8: {"N": 8, "tau_p": 0.024, "integration_method": "trapezoid"}}
     bounds = [(0.1, 10.0), (0.1, 5.0)]
-    
+
     opt_args, errors, result = fit_coherence_decay_combined(
         C_t_observed_dict,
         times_dict,
@@ -122,7 +122,7 @@ def test_global_loss_function():
     freq_points = np.array([1.0, 2.0, 3.0])
     S_w_observed = np.array([1.5, 0.75, 0.5])
     param_structure = [{"A": 1, "alpha": 1}]
-    
+
     loss = _global_loss_function(
         params,
         freq_points,
@@ -135,7 +135,7 @@ def test_global_loss_function():
 def test_fit_noise_spectrum():
     freq_points = np.array([1.0, 2.0, 3.0])
     S_w_observed = np.array([10.0, 5.0, 3.33])
-    
+
     opt_args, result = fit_noise_spectrum(
         freq_points,
         S_w_observed,

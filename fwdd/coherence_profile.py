@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Union, Tuple, Optional, Callable, Any, List
+from typing import Any, Callable, Optional, Tuple, Union
 
 import numba as nb
 import numpy as np

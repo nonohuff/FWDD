@@ -1,7 +1,8 @@
+from typing import Union
+
 import numba as nb
 import numpy as np
 from scipy.stats import cauchy
-from typing import Union
 
 #define the functions to have different kinds of noise
 ##### Document Conventions #####

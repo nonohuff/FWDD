@@ -1,6 +1,7 @@
+from typing import Union
+
 import numba as nb
 import numpy as np
-from typing import Union
 
 
 @nb.njit(parallel=False)
