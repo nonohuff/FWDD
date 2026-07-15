@@ -12,3 +12,8 @@ fwdd.egg-info/SOURCES.txt
 fwdd.egg-info/dependency_links.txt
 fwdd.egg-info/requires.txt
 fwdd.egg-info/top_level.txt
+tests/test_coherence_profile.py
+tests/test_filter_function.py
+tests/test_fitting_utils.py
+tests/test_noise_learning_fitting.py
+tests/test_noise_spectra.py
