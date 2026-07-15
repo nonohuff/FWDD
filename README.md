@@ -94,7 +94,7 @@ If you use `fwdd` in your research, please cite our work:
 ```bibtex
 @misc{biswas2025quantum,
   title = {Quantum sensing with a spin ensemble in a two-dimensional material},
-  author = {Souvik Biswas and Giovanni Scuri and Noah Huffman and Eric I. Rosenthal and Ruotian Gong and Thomas Poirier and Xingyu Gao and Sumukh Vaidya and Abigail J. Stein and Tsachy Weissman and James H. Edgar and Tongcang Li and Chong Zu and Jelena Vučković and Joonhee Choi},
+  author = {Souvik Biswas, Giovanni Scuri, Noah Huffman, and et al.},
   year = {2025},
   eprint = {2509.08984},
   archivePrefix = {arXiv},
