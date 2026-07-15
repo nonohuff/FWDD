@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: PLACEHOLDER_SHA256 # Automatically computed during submission to conda-forge
+  sha256: e66d721d797f0bdd9dfc3b5cc8f6cf8f64e6c1cbbdf8aa69b7f88d60301d6a97
 
 build:
   number: 0
